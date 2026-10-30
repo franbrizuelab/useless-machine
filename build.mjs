@@ -722,19 +722,32 @@ const label = V2
 const svg = k.figureSvg({ width: W, height: H, label, body: `<g class="um-engine">${groups.join("")}</g><g class="um-over"></g>` });
 const parts = CALLS.map((call) => `<li><button type="button" class="um-part" data-c="${call.id}"><span class="um-num">${call.id}</span><span class="um-name">${call.name}</span><span class="um-say">${call.say}</span></button></li>`).join("");
 const versions = `<nav class="um-ver" aria-label="Version">${[1, 2, 3].map((ver) => `<a href="${pageName(ver)}"${ver === VER ? ' aria-current="page"' : ""}>v${ver}</a>`).join("")}</nav>`;
-const STAGE_SAY = ["assembled", "lid, mechanism and battery lifted apart along Z", "arm and gears pulled off their shafts along Y", "cells and clip slid out along X"];
+const STAGE_SAY = ["lift the lid, mechanism and battery apart along Z", "pull the arm and gears off their shafts along Y", "slide the cells and clip out along X"];
+// v3 stage buttons are toggles: none lit is the whole machine, and pressing the lit one puts it back together.
 const stepButtons = STAGES.length > 1 && V3
-  ? `<div class="um-steps" role="group" aria-label="Take-apart stage"><svg class="um-steps-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.2 8 1.6l5.5 2.6L8 6.8z"/><path d="M2.5 9.4 8 12l5.5-2.6M2.5 9.4V12L8 14.6l5.5-2.6V9.4"/></svg>${[0, ...STAGES.map((_, s) => s + 1)].map((n) => `<button type="button" class="um-step" data-step="${n}" aria-pressed="${n === 0}" aria-label="Stage ${n + 1} of ${STAGES.length + 1}: ${STAGE_SAY[n]}">${n + 1}</button>`).join("")}</div>`
+  ? `<div class="um-steps" role="group" aria-label="Take-apart stages"><svg class="um-steps-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.2 8 1.6l5.5 2.6L8 6.8z"/><path d="M2.5 9.4 8 12l5.5-2.6M2.5 9.4V12L8 14.6l5.5-2.6V9.4"/></svg>${STAGES.map((_, s) => `<button type="button" class="um-step" data-step="${s + 1}" aria-pressed="false" aria-label="Stage ${s + 1} of ${STAGES.length}: ${STAGE_SAY[s]}">${s + 1}</button>`).join("")}</div>`
   : "";
 const flipButton = `<button type="button" class="um-btn" data-flip><span class="um-lamp" aria-hidden="true"></span><span data-flip-label>Flip the switch</span></button>`;
+// v3 icons, drawn on their own grids: a hand tapping (flip the switch) and an eight-tooth gear (settings).
+const HAND = "M9 15.8V4.5a1.5 1.5 0 0 1 3 0V11M12 11V9.6a1.5 1.5 0 0 1 3 0v1.6M15 11.2v-.8a1.5 1.5 0 0 1 3 0v1.6M18 12v-.4a1.5 1.5 0 0 1 3 0v4c0 3.5-2.7 6.1-6.2 6.1h-1.6c-2 0-3.3-.6-4.6-1.9l-4.2-4.2a1.5 1.5 0 0 1 2.1-2.1L9 15.8M7.1 2.9 5.7 2M6.9 5.4H5.3M13.9 2.9l1.4-.9M14.1 5.4h1.6";
+const GEAR = (() => {
+  const points = [];
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * 2 * Math.PI;
+    for (const [r, t] of [[5.5, -0.62], [7.1, -0.34], [7.1, 0.34], [5.5, 0.62]]) points.push([8 + r * Math.cos(a + (t * Math.PI) / 8), 8 + r * Math.sin(a + (t * Math.PI) / 8)]);
+  }
+  return `M${points.map((p) => p.map((v) => v.toFixed(2)).join(" ")).join("L")}Z`;
+})();
+const flipIcon = `<button type="button" class="um-act" data-flip aria-label="Flip the switch"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${HAND}"/></svg></button>`;
+const settings = `<div class="um-settings"><nav class="um-ver" id="um-ver" aria-label="Version">${[1, 2, 3].map((ver) => `<a href="${pageName(ver)}"${ver === VER ? ' aria-current="page"' : ""}>v${ver}</a>`).join("")}</nav><button type="button" class="um-act um-gear" data-settings aria-expanded="false" aria-controls="um-ver" aria-label="Settings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${GEAR}"/><circle cx="8" cy="8" r="2.2"/></svg></button></div>`;
 const controls = V3
-  ? `<div class="um-controls">${flipButton}${stepButtons}${versions}</div><div class="um-info" aria-hidden="true"><p class="um-info-empty" data-info-empty>Hover over a number to see information about the piece.</p><div class="um-info-card" data-info-card><span class="um-info-num" data-info-num></span><span class="um-info-name" data-info-name></span><span class="um-info-say" data-info-say></span></div></div>`
+  ? `<div class="um-controls">${flipIcon}${stepButtons}${settings}</div><div class="um-info" aria-hidden="true"><p class="um-info-empty" data-info-empty>Hover over a number to see information about the piece.</p><div class="um-info-card" data-info-card><span class="um-info-num" data-info-num></span><span class="um-info-name" data-info-name></span><span class="um-info-say" data-info-say></span></div></div>`
   : `<div class="um-controls">${flipButton}<button type="button" class="um-btn" data-apart>Take apart</button><span class="um-note" data-note aria-live="polite"></span>${versions}</div>`;
 const corners = V3
   ? `<button type="button" class="um-round um-auto" data-auto aria-pressed="false" aria-label="Run the machine on its own"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="um-play" d="M5.6 3.6v8.8L12.4 8z"/><path class="um-pause" d="M4.8 3.8h2.3v8.4H4.8zM8.9 3.8h2.3v8.4H8.9z"/></svg></button><button type="button" class="um-round um-infobtn" data-info aria-pressed="true" aria-label="Show the part numbers and their leader lines"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="4.4" r="1.15"/><path d="M6.4 7h2.4v5.2h1.2v1.1H6v-1.1h1.2V8.1h-.8z"/></svg></button>`
   : "";
 const caption = V3
-  ? "The toggle is a DPDT switch wired across a DC motor. Flipped on, it sends the battery to the motor one way: the arm rises, pushes the door open and rests against it, and its pin pushes the lever back over centre. That reverses the motor through the limit switch, so the arm retracts, the spring hinge pulls the door shut behind it, and the arm settles on the limit switch's leaf, which opens the circuit. Every lead plugs into a small board on the base. Front and right walls removed. The numbered buttons take it apart in stages, one axis each: 2 lifts the lid, mechanism and battery along Z; 3 slides the arm and gears off their shafts along Y; 4 slides the clip and cells out along X. Pick any stage and it plays the stages in between."
+  ? "The toggle is a DPDT switch wired across a DC motor. Flipped on, it sends the battery to the motor one way: the arm rises, pushes the door open and rests against it, and its pin pushes the lever back over centre. That reverses the motor through the limit switch, so the arm retracts, the spring hinge pulls the door shut behind it, and the arm settles on the limit switch's leaf, which opens the circuit. Every lead plugs into a small board on the base. Front and right walls removed. The numbered buttons take it apart in three stages, one axis each: 1 lifts the lid, mechanism and battery along Z; 2 slides the arm and gears off their shafts along Y; 3 slides the clip and cells out along X. Pick any stage and it plays the stages in between; press the lit one again to put it back together."
   : V2
   ? "The toggle is a DPDT switch wired across a DC motor. Flipped on, it sends the battery to the motor one way: the arm rises, pushes the door open and rests against it, and its pin pushes the lever back over centre. That reverses the motor through the limit switch, so the arm retracts, the door's torsion springs pull it shut behind it, and the arm settles on the limit switch's leaf, which opens the circuit. Every lead plugs into a small board on the base. Front and right walls removed. It comes apart in three steps, one per axis: the lid, mechanism and battery lift along Z; the arm and gears slide off their shafts along Y; the clip and cells slide out along X."
   : "The toggle is a DPDT switch wired across a DC motor. Flipped on, it sends the battery to the motor one way and the arm rises. The arm's pin pushes the lever back over centre, which reverses the motor through the limit switch. The arm retracts until it sits on the limit switch's leaf, which opens the circuit and stops it. Front and right walls removed; the lid, mechanism and battery pack separate along the vertical axis.";
@@ -746,7 +759,9 @@ const stageLabel = V3
 let plate = k.plateHtml({ fig: "Fig 1", title: "Useless machine", hint: V3 ? "" : "Click the switch", readout: V3 ? "" : "ready", keys: [], caption: "", body: `<div class="iso-stage um-stage" tabindex="0" role="group" aria-label="${stageLabel}">${svg}</div>${corners}` });
 if (V3) plate = plate.replace(/<span class="iso-plate-corner" data-corner="readout"[^>]*><\/span>/, "");
 const body = `<div class="um${V3 ? " um3" : ""}">${plate.replace("</div></figure>", `</div>${controls}</figure>`)}<div class="um-below"><div class="um-circuit">${circuit}</div><ol class="um-parts">${parts}</ol></div><p class="iso-caption um-caption">${caption}</p></div>`;
-const page = k.pageHtml({ title: "Useless machine", theme: THEME, body: `<style>${css}</style>${body}`, script, width: 1000 });
+let page = k.pageHtml({ title: "Useless machine", theme: THEME, body: `<style>${css}</style>${body}`, script, width: V3 ? 1100 : 1000 });
+// v3 drops the page's empty band above the card
+if (V3) page = page.replace("margin:64px auto 96px", "margin:16px auto 64px");
 writeFileSync(join(HERE, pageName(VER)), page);
 console.log("wrote", `${R.items.length} items`, `${(page.length / 1024).toFixed(0)} KB`, `fit ${fit.toFixed(2)}`);
 const first = A.auditOrExit(R, P, { crowd: CROWD_OK });

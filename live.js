@@ -743,9 +743,17 @@ if (apartBtn)
 stepButtons.forEach((button) =>
   button.addEventListener("click", () => {
     lastInput = now();
-    setStep(Number(button.dataset.step));
+    const n = Number(button.dataset.step);
+    setStep(stepTarget === n ? 0 : n);
   }),
 );
+const settingsBtn = root.querySelector("[data-settings]");
+if (settingsBtn)
+  settingsBtn.addEventListener("click", () => {
+    const open = settingsBtn.getAttribute("aria-expanded") !== "true";
+    settingsBtn.setAttribute("aria-expanded", String(open));
+    settingsBtn.parentElement.toggleAttribute("data-open", open);
+  });
 if (autoBtn) autoBtn.addEventListener("click", () => setAuto(!auto));
 if (infoBtn) infoBtn.addEventListener("click", () => setCalls(!showCalls));
 partButtons.forEach((button) => {

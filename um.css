@@ -74,7 +74,7 @@
 .um3 .iso-plate { border-radius: 14px; }
 .um3 .um-stage { border-radius: 14px; }
 .um3 .um-btn { border-radius: 9px; }
-.um3 .um-ver { margin-left: auto; border-radius: 9px; overflow: hidden; }
+.um3 .um-ver { border-radius: 10px; overflow: hidden; }
 .um3 .um-circuit { border-radius: 12px; }
 .um3 .um-part { border-radius: 0 8px 8px 0; }
 .um-round { position: absolute; bottom: 14px; z-index: 3; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--um-ink2); border-radius: 50%; background: var(--anatomy-paper); color: var(--um-ink0); cursor: pointer; transition: background .2s, border-color .2s; }
@@ -106,3 +106,34 @@
 .um-info-say { color: var(--anatomy-text); font-size: 12.5px; line-height: 1.45; }
 @media (max-width: 760px) { .um-info { height: 164px; } .um-info-card { align-content: start; padding-top: 16px; } }
 @media (prefers-reduced-motion: reduce) { .um-info-card, .um-info-empty, .um-over .um-call { transition: none; animation: none; } }
+.um3 .iso-plate-corner { font-size: 11.5px; }
+.um3 .um-controls { gap: 11px; padding-top: 13px; }
+.um-act { display: inline-grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid var(--um-ink2); border-radius: 10px; background: var(--anatomy-paper); color: var(--um-ink0); cursor: pointer; transition: background .2s, border-color .2s, transform .12s; }
+.um-act svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.um-gear svg { width: 19px; height: 19px; stroke-width: 1.1; }
+.um-act:hover { border-color: var(--um-ink0); background: #fff; }
+.um-act:active { transform: scale(.94); }
+.um-act:focus-visible { outline: 1px solid var(--um-ink0); outline-offset: 2px; }
+.um-act[data-state="on"], .um-act[aria-expanded="true"] { border-color: var(--um-ink1); background: var(--um-dim); }
+.um-settings { display: inline-flex; align-items: center; gap: 9px; margin-left: auto; }
+.um-settings .um-ver { opacity: 0; visibility: hidden; transform: translateX(8px); transition: opacity .22s var(--anatomy-ease), transform .22s var(--anatomy-ease), visibility 0s .22s; }
+.um-settings[data-open] .um-ver { opacity: 1; visibility: visible; transform: none; transition: opacity .22s var(--anatomy-ease), transform .22s var(--anatomy-ease); }
+.um3 .um-ver a { height: 36px; padding: 0 13px; font-size: 13px; }
+.um3 .um-round { width: 35px; height: 35px; }
+.um3 .um-round svg { width: 18px; height: 18px; }
+.um3 .um-steps { height: 38px; border-radius: 12px; }
+.um3 .um-steps-icon { width: 18px; height: 18px; }
+.um3 .um-step { width: 33px; height: 29px; border-radius: 9px; font-size: 13px; }
+.um3 .um-info { height: 95px; margin-top: 13px; }
+.um3 .um-info-empty { font-size: 13px; }
+.um3 .um-info-card { grid-template-columns: 33px 1fr; padding: 13px 22px; }
+.um3 .um-info-num { width: 33px; height: 33px; font-size: 13px; }
+.um3 .um-info-name { font-size: 15px; }
+.um3 .um-info-say { font-size: 13.75px; }
+.um3 .um-below { grid-template-columns: 410px 1fr; gap: 31px; margin-top: 20px; }
+.um3 .um-circuit { padding: 15px 18px 11px; }
+.um3 .um-part { grid-template-columns: 26px 1fr; font-size: 13.75px; }
+.um3 .um-num { width: 22px; height: 22px; font-size: 11.5px; }
+.um3 .um-say { font-size: 12.65px; }
+.um3 .um-caption { margin-top: 18px; font-size: 15.4px; }
+@media (max-width: 760px) { .um3 .um-below { grid-template-columns: 1fr; } .um3 .um-info { height: 180px; } }
