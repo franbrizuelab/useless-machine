@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="cc" viewBox="0 0 340 196" role="img" aria-label="Circuit: a three-cell battery, a DPDT toggle switch wired across a DC motor, and a limit switch in the reverse path only.">
+<text class="cc-t cc-h" x="2" y="10">CIRCUIT</text>
+<g class="cc-w">
+<path data-seg="railTopA" d="M40 24H118"/><path data-seg="railTopB" d="M118 24H212"/>
+<path data-seg="railBotA" d="M40 172H118"/><path data-seg="railBotB" d="M118 172H212"/>
+<path data-seg="bat" d="M40 24V72M40 120V172"/>
+<path data-seg="aUp" d="M118 24V52"/><path data-seg="aDn" d="M118 172V138"/>
+<path data-seg="aLevUp" d="M132 95L118 52"/><path data-seg="aLevDn" d="M132 95L118 138"/>
+<path data-seg="wireA" d="M132 95H151"/><path data-seg="wireB" d="M179 95H198"/>
+<path data-seg="bLevUp" d="M198 95L212 52"/><path data-seg="bLevDn" d="M198 95L212 138"/>
+<path data-seg="bDn" d="M212 172V138"/>
+<path data-seg="bUp" d="M212 52V40"/><path data-seg="lsTop" d="M212 30V24"/>
+<path data-seg="lsClosed" d="M212 40V30"/><path data-seg="lsOpen" d="M212 40L204 31"/>
+</g>
+<g class="cc-cell"><path d="M29 72H51"/><path d="M34 80H46"/><path d="M29 92H51"/><path d="M34 100H46"/><path d="M29 112H51"/><path d="M34 120H46"/></g>
+<g data-seg="motor"><circle class="cc-motor" cx="165" cy="95" r="14"/><text class="cc-t cc-m" x="165" y="95" dy=".35em" text-anchor="middle">M</text></g>
+<rect class="cc-box" x="106" y="46" width="122" height="104" rx="3"/>
+<g class="cc-dot"><circle cx="118" cy="52" r="2.2"/><circle cx="118" cy="138" r="2.2"/><circle cx="212" cy="52" r="2.2"/><circle cx="212" cy="138" r="2.2"/><circle cx="132" cy="95" r="2.2"/><circle cx="198" cy="95" r="2.2"/><circle cx="212" cy="30" r="2"/><circle cx="212" cy="40" r="2"/><circle cx="40" cy="24" r="2"/><circle cx="40" cy="172" r="2"/></g>
+<text class="cc-t" x="54" y="92">3 × AA</text><text class="cc-t" x="54" y="104">4.5 V</text>
+<text class="cc-t" x="34" y="18" text-anchor="middle">+</text><text class="cc-t" x="34" y="184" text-anchor="middle">−</text>
+<text class="cc-t" x="126" y="66">DPDT toggle</text>
+<text class="cc-t" x="100" y="56" text-anchor="end">on</text><text class="cc-t" x="100" y="142" text-anchor="end">off</text>
+<text class="cc-t" x="222" y="31">limit</text><text class="cc-t" x="222" y="42">switch</text>
+<text class="cc-t cc-v" x="244" y="88" data-volts>0.0 V</text><text class="cc-t" x="244" y="102" data-dir>stopped</text>
+</svg>
