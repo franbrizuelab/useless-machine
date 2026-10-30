@@ -39,9 +39,12 @@ magick shots/v3/og-raw.png -resize x630 -background "#fbfbfa" -gravity center -e
 ## Flip counter
 
 The "flips undone worldwide" count comes from a small Cloudflare Worker in `counter/`: one Durable Object holds the
-count, `GET /count` reads it and `POST /flip` adds one. Only flips made by hand on the published page are posted, at
-most one every 1.5 s per address, and addresses are not stored. To deploy a change:
+count. `GET /count` reads it; `POST /flip` adds one, but only with a challenge from `GET /challenge` (signed by the
+Worker, valid two minutes, usable once) and a proof of work on it (about 130,000 SHA-256 hashes, found in a background
+thread while the arm moves). Each address also gets at most one flip every 2 s, from a bucket of 30 that refills one
+every 5 s. Only flips made by hand on the published page are posted, and addresses are not stored.
 
 ```sh
-cd counter && npx wrangler deploy
+cd counter && npx wrangler deploy                     # deploy a change
+openssl rand -hex 32 | npx wrangler secret put SECRET # rotate the signing key
 ```
