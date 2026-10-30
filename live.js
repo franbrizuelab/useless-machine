@@ -6,9 +6,13 @@ const svg = stage.querySelector("svg");
 const engine = svg.querySelector(".um-engine");
 const over = svg.querySelector(".um-over");
 const readout = root.querySelector("[data-readout]");
-const note = root.querySelector("[data-note]");
+const note = root.querySelector("[data-note]") || { textContent: "" };
 const flipBtn = root.querySelector("[data-flip]");
 const apartBtn = root.querySelector("[data-apart]");
+const stepButtons = [...root.querySelectorAll("[data-step]")];
+const autoBtn = root.querySelector("[data-auto]");
+const infoBtn = root.querySelector("[data-info]");
+const infoBox = root.querySelector(".um-info");
 const partButtons = [...root.querySelectorAll(".um-part")];
 const cc = root.querySelector(".um-circuit svg");
 const still = matchMedia("(prefers-reduced-motion: reduce)");
@@ -61,6 +65,7 @@ let frame = 0;
 let visible = false;
 let lastInput = -1e9;
 let tourTimer = 0;
+let auto = !D.v3;
 const now = () => performance.now();
 
 function paintDynamic() {
@@ -183,16 +188,170 @@ const worldOf = (call) => {
   return call.anchor;
 };
 
+// v3 leaders are horizontal. Each callout has a spine (polylines on the part's visible face, in world units); the
+// badges of a column are packed apart at the heights their spines allow, and each leader lands on its spine at its
+// badge's height. Badges glide to new heights, so a column that reorders as parts move does not jump.
+// later[s] replaces a callout's spine and anchor once take-apart step s is more than half done.
+const laterOf = (call) => {
+  if (!call.later) return null;
+  for (let s = STEPS.length - 1; s > 0; s--) if (call.later[s] && springs[s][STEPS[s].order[0]].x > 0.5) return call.later[s];
+  return null;
+};
+const prefOf = (call) => {
+  if (call.dyn === "arm") return worldOf(call);
+  if (call.dyn === "pin") {
+    const [x, z] = M.pinAt(st.phi);
+    return [x, M.Y.pin[0] + 1.6, z];
+  }
+  if (call.dyn === "lever") {
+    const [x, z] = turnPoint([M.LEVER.length - 1.2, 0], M.LEVER.x, M.LEVER.pivotZ, Math.PI / 2 - st.th * M.RAD);
+    return [x, M.Y.lever[1], z];
+  }
+  return (laterOf(call) || call).anchor;
+};
+const spineOf = (call) => {
+  if (call.dyn === "arm") {
+    const points = [];
+    for (let s = 12; s <= 40; s += 4) {
+      const [x, z] = turnPoint(M.ARM_SHAPE.centre(s), M.S[0], M.S[1], st.phi);
+      points.push([x, M.Y.arm[1], z]);
+    }
+    return [points];
+  }
+  if (call.dyn === "pin") {
+    const [x, z] = M.pinAt(st.phi);
+    return [[[x, M.Y.pin[0] + 0.4, z], [x, M.Y.pin[0] + 4.6, z]]];
+  }
+  if (call.dyn === "lever") {
+    const a = Math.PI / 2 - st.th * M.RAD;
+    return [[4.6, M.LEVER.length - 0.6].map((u) => {
+      const [x, z] = turnPoint([u, 0], M.LEVER.x, M.LEVER.pivotZ, a);
+      return [x, M.Y.lever[1], z];
+    })];
+  }
+  return (laterOf(call) || call).spine;
+};
+function landOn(call, y, side) {
+  let best = null;
+  for (const line of call.lines)
+    for (let j = 0; j < Math.max(1, line.length - 1); j++) {
+      const a = line[j];
+      const b = line[j + 1] || a;
+      const dy = b[1] - a[1];
+      const t = Math.abs(dy) < 1e-6 ? 0.5 : clampTo((y - a[1]) / dy, 0, 1);
+      const p = [a[0] + (b[0] - a[0]) * t, a[1] + dy * t];
+      const score = Math.abs(p[1] - y) * 1000 + (side < 0 ? p[0] : D.W - p[0]);
+      if (!best || score < best.score) best = { p, score };
+    }
+  return best.p;
+}
+let callClock = 0;
+let callsEasing = false;
+// A column starts in the order of its preferred heights; a neighbour swap is kept when it lets more leaders stay
+// level (a short spine boxed in by a long one packs better on the other side of it).
+function packColumn(column, gap, top, bottom) {
+  column.sort((a, b) => a.pref[1] - b.pref[1] || a.id - b.id);
+  let best = packOrder(column, gap, top, bottom);
+  for (let pass = 0; pass < 3 && best.cost > 0.5; pass++)
+    for (let i = 1; i < column.length; i++) {
+      [column[i - 1], column[i]] = [column[i], column[i - 1]];
+      const trial = packOrder(column, gap, top, bottom);
+      if (trial.cost < best.cost - 0.5) best = trial;
+      else [column[i - 1], column[i]] = [column[i], column[i - 1]];
+    }
+  column.forEach((call, i) => (call.goal = best.y[i]));
+}
+function packOrder(column, gap, top, bottom) {
+  const lo = column.map((call) => Math.min(Math.max(call.lo, top), bottom));
+  const hi = column.map((call, i) => Math.max(Math.min(call.hi, bottom), lo[i]));
+  const y = column.map((call, i) => clampTo(call.pref[1], lo[i], hi[i]));
+  for (let round = 0; round < 80; round++) {
+    let moved = false;
+    for (let i = 1; i < y.length; i++) {
+      const short = y[i - 1] + gap - y[i];
+      if (short < 0.01) continue;
+      const roomUp = Math.max(0, y[i - 1] - lo[i - 1]);
+      const roomDown = Math.max(0, hi[i] - y[i]);
+      let up = short / 2;
+      let down = short / 2;
+      if (up > roomUp) [down, up] = [down + up - roomUp, roomUp];
+      if (down > roomDown) [up, down] = [Math.min(roomUp, up + down - roomDown), roomDown];
+      if (up + down < 0.01) continue;
+      y[i - 1] -= up;
+      y[i] += down;
+      moved = true;
+    }
+    if (!moved) break;
+  }
+  for (let i = 1; i < y.length; i++) y[i] = Math.max(y[i], y[i - 1] + gap);
+  if (y.length && y[y.length - 1] > bottom) {
+    y[y.length - 1] = bottom;
+    for (let i = y.length - 2; i >= 0; i--) y[i] = Math.min(y[i], y[i + 1] - gap);
+  }
+  const cost = y.reduce((sum, v, i) => sum + Math.max(0, lo[i] - v, v - hi[i]) * 10 + Math.abs(v - column[i].pref[1]) * 0.01, 0);
+  return { y, cost };
+}
+function paintCalls3(view) {
+  const time = now();
+  const dt = callClock ? Math.min(0.05, (time - callClock) / 1000) : 0;
+  callClock = time;
+  const columns = { L: [], R: [] };
+  for (const call of calls) {
+    call.lines = spineOf(call).map((line) => line.map((w) => screenOf(w, call.piece, view, call.rides)));
+    call.pref = screenOf(prefOf(call), call.piece, view, call.rides);
+    call.lo = Math.min(...call.lines.flat().map((p) => p[1]));
+    call.hi = Math.max(...call.lines.flat().map((p) => p[1]));
+    columns[call.side].push(call);
+  }
+  // keep the columns clear of the corner text above and the round buttons below, which do not scale with the drawing
+  const px = D.W / Math.max(1, stage.clientWidth);
+  const gap = (badgeK > 1 ? 21 : 25) * badgeK;
+  for (const column of Object.values(columns)) packColumn(column, gap, Math.max(64, 40 * px), D.H - Math.max(64, 58 * px));
+  // A badge follows its goal exactly while the goal moves smoothly; when a column reorders, the goals jump, and the
+  // jump is carried as an offset that decays, so the badges glide to their new places.
+  const decay = still.matches || !dt ? 0 : Math.exp(-dt / 0.07);
+  callsEasing = false;
+  for (const call of calls) {
+    if (call.shownY === undefined || !dt) call.offset = 0;
+    else {
+      const jump = call.goal - call.lastGoal;
+      call.offset = (Math.abs(jump) > 4 * badgeK ? call.offset - jump : call.offset) * decay;
+    }
+    if (Math.abs(call.offset) < 0.05) call.offset = 0;
+    else callsEasing = true;
+    call.lastGoal = call.goal;
+    call.shownY = call.goal + call.offset;
+    const side = call.side === "L" ? -1 : 1;
+    const edge = Math.max(46, 9.2 * badgeK + 10);
+    const x = side < 0 ? edge : D.W - edge;
+    const y = call.shownY;
+    const [px, py] = landOn(call, y, side);
+    const from = x - side * 9.2 * badgeK;
+    const bend = Math.abs(py - y) > 0.4 ? `H${(px + side * 10).toFixed(1)}L${px.toFixed(1)} ${py.toFixed(1)}` : `H${px.toFixed(1)}`;
+    call.line.setAttribute("d", `M${from.toFixed(1)} ${y.toFixed(1)}${bend}`);
+    call.dot.setAttribute("cx", px.toFixed(1));
+    call.dot.setAttribute("cy", py.toFixed(1));
+    call.badge.setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${badgeK.toFixed(3)})`);
+  }
+  if (callsEasing) run();
+}
+
 let badgeK = 1;
 const readScale = () => {
   badgeK = clampTo((0.8 * D.W) / Math.max(1, stage.clientWidth), 1, 2.3);
 };
 new ResizeObserver(() => {
   readScale();
+  callClock = 0;
   place();
 }).observe(stage);
 
 function paintCalls(view) {
+  if (D.v3) {
+    paintCalls3(view);
+    paintHit(view);
+    return;
+  }
   const left = [];
   const right = [];
   for (const call of calls) {
@@ -224,6 +383,9 @@ function paintCalls(view) {
     call.dot.setAttribute("cy", py.toFixed(1));
     call.badge.setAttribute("transform", `translate(${x.toFixed(1)} ${call.y.toFixed(1)}) scale(${badgeK.toFixed(3)})`);
   }
+  paintHit(view);
+}
+function paintHit(view) {
   const tip = turnPoint([M.LEVER.length * 0.55, 0], M.LEVER.x, M.LEVER.pivotZ, Math.PI / 2 - st.th * M.RAD);
   const [hx, hy] = screenOf([tip[0], M.Y.lever[1], tip[1]], "lid", view);
   hit.setAttribute("cx", hx.toFixed(1));
@@ -329,6 +491,8 @@ function setStep(target) {
 const setApart = (on) => setStep(on ? STEPS.length : 0);
 const nextStep = () => setStep(stepTarget >= STEPS.length ? 0 : stepTarget + 1);
 function labelApart() {
+  stepButtons.forEach((button) => button.setAttribute("aria-pressed", String(Number(button.dataset.step) === stepTarget)));
+  if (!apartBtn) return;
   const text = stepTarget >= STEPS.length ? "Put it together" : STEPS.length === 1 || stepTarget === 0 ? "Take apart" : `Next: ${STEPS[stepTarget].name}`;
   if (apartBtn.textContent !== text) apartBtn.textContent = text;
 }
@@ -345,13 +509,17 @@ function launch(s, goal) {
   flipBtn.disabled = false;
   describe();
 }
+// v3 chains the stages on the way to a far one: the next stage starts as the last one is within 3% of its goal, so a
+// jump from 1 to 4 plays as one movement.
+const stepNear = (s, goal) => Object.values(springs[s]).every((one) => !one.pending && one.target === goal && Math.abs(one.x - goal) < 0.03 && Math.abs(one.v) < 0.6);
+const stepHeld = (s, goal) => (D.v3 ? !stepNear(s, goal) : stepBusy(s));
 function driveSteps() {
   const out = stepsOut();
   if (stepTarget > out) {
-    if (out === 0 ? !idle() : stepBusy(out - 1)) return;
+    if (out === 0 ? !idle() : stepHeld(out - 1, 1)) return;
     launch(out, 1);
   } else if (stepTarget < out) {
-    if (out < STEPS.length && stepBusy(out)) return;
+    if (out < STEPS.length && stepHeld(out, 0)) return;
     launch(out - 1, 0);
   }
 }
@@ -387,11 +555,34 @@ function select(id) {
   }
   for (const call of calls) (String(call.id) === String(id) ? call.g.setAttribute("data-on", "") : call.g.removeAttribute("data-on"));
   partButtons.forEach((button) => (button.dataset.c === String(id) ? button.setAttribute("data-on", "") : button.removeAttribute("data-on")));
+  showInfo(id);
   describe();
 }
 
+// v3: the box under the controls shows the part whose number is under the pointer; it keeps its height, so nothing
+// below it moves.
+const info = infoBox
+  ? { card: infoBox.querySelector("[data-info-card]"), empty: infoBox.querySelector("[data-info-empty]"), num: infoBox.querySelector("[data-info-num]"), name: infoBox.querySelector("[data-info-name]"), say: infoBox.querySelector("[data-info-say]"), shown: null }
+  : null;
+let showCalls = true;
+function showInfo(id) {
+  if (!info) return;
+  const call = id === null ? null : D.calls.find((c) => String(c.id) === String(id));
+  if (call && info.shown !== call.id) {
+    info.num.textContent = call.id;
+    info.name.textContent = call.name;
+    info.say.textContent = call.say;
+    info.card.classList.remove("um-in");
+    void info.card.offsetWidth;
+    info.card.classList.add("um-in");
+  }
+  info.shown = call ? call.id : null;
+  infoBox.toggleAttribute("data-show", Boolean(call));
+  info.empty.textContent = showCalls ? "Hover over a number to see information about the piece." : "Numbers are hidden. Turn them on with the i button to see information about each piece.";
+}
+
 function say(text) {
-  if (readout.textContent !== text) readout.textContent = text;
+  if (readout && readout.textContent !== text) readout.textContent = text;
 }
 function describe() {
   const call = selected ? D.calls.find((c) => String(c.id) === String(selected)) : null;
@@ -484,7 +675,7 @@ function tick(time) {
   say(status());
   announce();
   flipBtn.setAttribute("data-state", st.th < 0 ? "on" : "off");
-  const busy = moving || springsMoving() || !idle() || stepTarget !== stepsOut() || pendingFlip || circuitMoving();
+  const busy = moving || springsMoving() || !idle() || stepTarget !== stepsOut() || pendingFlip || circuitMoving() || callsEasing;
   frame = visible && busy ? requestAnimationFrame(tick) : 0;
   if (!busy) afterIdle();
 }
@@ -496,14 +687,36 @@ function run() {
   }
 }
 
+// v1 and v2 run an idle tour when nobody touches the figure; v3 runs only while its play button is on, and then
+// flips the switch again a moment after the arm comes home.
 function afterIdle() {
   clearTimeout(tourTimer);
-  if (still.matches || apart || stepTarget > 0) return;
-  const wait = Math.max(1800, lastInput + 3600 - now());
+  if ((still.matches && !D.v3) || !auto || apart || stepTarget > 0) return;
+  const wait = D.v3 ? 1100 : Math.max(1800, lastInput + 3600 - now());
   tourTimer = setTimeout(() => {
-    if (visible && idle() && assembled() && now() - lastInput > 3500) flip(true);
+    if (visible && auto && idle() && assembled() && (D.v3 || now() - lastInput > 3500)) flip(true);
     else afterIdle();
   }, wait);
+}
+function setAuto(on) {
+  auto = on;
+  if (autoBtn) {
+    autoBtn.setAttribute("aria-pressed", String(on));
+    autoBtn.setAttribute("aria-label", on ? "Pause: stop running on its own" : "Run the machine on its own");
+  }
+  if (on && (idle() || stepTarget > 0 || !assembled())) flip(true);
+  run();
+  afterIdle();
+}
+function setCalls(on) {
+  showCalls = on;
+  if (infoBtn) infoBtn.setAttribute("aria-pressed", String(on));
+  over.classList.toggle("um-calls-off", !on);
+  if (!on) {
+    pinned = null;
+    select(null);
+  }
+  showInfo(null);
 }
 
 new IntersectionObserver(
@@ -522,10 +735,19 @@ hit.addEventListener("pointerdown", (event) => {
   flip();
 });
 flipBtn.addEventListener("click", () => flip());
-apartBtn.addEventListener("click", () => {
-  lastInput = now();
-  nextStep();
-});
+if (apartBtn)
+  apartBtn.addEventListener("click", () => {
+    lastInput = now();
+    nextStep();
+  });
+stepButtons.forEach((button) =>
+  button.addEventListener("click", () => {
+    lastInput = now();
+    setStep(Number(button.dataset.step));
+  }),
+);
+if (autoBtn) autoBtn.addEventListener("click", () => setAuto(!auto));
+if (infoBtn) infoBtn.addEventListener("click", () => setCalls(!showCalls));
 partButtons.forEach((button) => {
   const id = button.dataset.c;
   button.addEventListener("pointerenter", () => !pinned && select(id));
@@ -573,4 +795,14 @@ paintCircuit();
 place();
 say(status());
 describe();
-window.__um = { st, piece, springs, flip, setApart, setStep, nextStep, select, idle, assembled };
+labelApart();
+showInfo(null);
+// probe(world, piece, rides): the callout ids of the part painted on top at a world point (glass skipped), for checks.
+const probe = (world, id, rides = null) => {
+  const [x, y] = screenOf(world, id, camView(), rides);
+  const p = new DOMPoint(x, y).matrixTransform(svg.getScreenCTM());
+  const hits = [...new Set(document.elementsFromPoint(p.x, p.y).map((el) => el.closest(".it")).filter(Boolean))];
+  const top = hits.find((it) => !it.querySelector(".um-glass"));
+  return top ? top.dataset.c || `-${top.dataset.i}` : "";
+};
+window.__um = { st, piece, springs, flip, setApart, setStep, nextStep, select, idle, assembled, setAuto, setCalls, calls, probe };

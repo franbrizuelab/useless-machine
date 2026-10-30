@@ -1,0 +1,10 @@
+[["wait", 400], ["until", "window.__um && window.__um.idle()", 8000],
+ ["eval", "window.__bent = {}; window.__frames = 0; (function loop(){ window.__frames++; for (const g of document.querySelectorAll('.um-call')) { const d = g.querySelector('path').getAttribute('d'); if (d.includes('L')) window.__bent[g.dataset.c] = (window.__bent[g.dataset.c] || 0) + 1; } if (window.__frames < 100000) requestAnimationFrame(loop); })(); 1"],
+ ["eval", "window.__um.flip(); 1"], ["wait", 300], ["until", "window.__um.idle()", 12000], ["wait", 300],
+ ["eval", "JSON.stringify({frames: window.__frames, bent: window.__bent})"],
+ ["eval", "window.__bent = {}; window.__frames = 0; window.__um.setStep(3); 1"], ["wait", 300],
+ ["until", "window.__um.springs[2].cell0.x > 0.999 && window.__um.springs.every(g => Object.values(g).every(o => Math.abs(o.x - o.target) < 1e-3 && !o.pending))", 15000],
+ ["eval", "JSON.stringify({frames: window.__frames, bent: window.__bent})"],
+ ["eval", "window.__bent = {}; window.__frames = 0; window.__um.setStep(0); 1"], ["wait", 300],
+ ["until", "window.__um.assembled()", 15000], ["wait", 200],
+ ["eval", "JSON.stringify({frames: window.__frames, bent: window.__bent})"]]

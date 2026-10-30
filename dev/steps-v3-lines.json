@@ -1,0 +1,6 @@
+[["wait", 400], ["until", "window.__um && window.__um.idle()", 8000],
+ ["lines", "shots/v3/lines-home.png", ".um-stage"],
+ ["eval", "window.__um.flip(); 1"], ["wait", 700], ["lines", "shots/v3/lines-mid.png", ".um-stage"],
+ ["until", "window.__um.idle()", 9000],
+ ["click", "[data-step='1']"], ["until", "window.__um.springs[0].lid.x > 0.999 && window.__um.springs[0].battery.x > 0.999", 9000], ["wait", 600], ["lines", "shots/v3/lines-z.png", ".um-stage"],
+ ["click", "[data-step='3']"], ["until", "window.__um.springs[2].cell0.x > 0.999 && window.__um.springs[1].pinion.x > 0.999", 12000], ["wait", 600], ["lines", "shots/v3/lines-x.png", ".um-stage"]]
