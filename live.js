@@ -1321,6 +1321,102 @@ if (pieceBox.view) {
   });
 }
 
+// v3: the footer's message form. Two messages per visitor: the browser keeps a random visitor id and a count, and the
+// counter Worker holds each id to two (and each address to a few a day). A message needs the same proof of work as a
+// flip. The 500-character limit counts characters, not bytes, so accents, other scripts and emoji all count as one.
+const MAIL_MAX = 500;
+const MAIL_EACH = 2;
+const mail = D.counter
+  ? {
+      open: root.querySelector("[data-mail]"),
+      dialog: root.querySelector("[data-mail-dialog]"),
+      form: root.querySelector("[data-mail-form]"),
+      name: root.querySelector("[data-mail-name]"),
+      text: root.querySelector("[data-mail-text]"),
+      count: root.querySelector("[data-mail-count]"),
+      status: root.querySelector("[data-mail-status]"),
+      send: root.querySelector("[data-mail-send]"),
+    }
+  : null;
+const stored = (key, fallback) => {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+const store = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {}
+};
+const visitorId = () => {
+  let id = stored("um-visitor", "");
+  if (!/^[A-Za-z0-9-]{8,64}$/.test(id)) {
+    id = crypto.randomUUID ? crypto.randomUUID() : [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    store("um-visitor", id);
+  }
+  return id;
+};
+function mailLeft() {
+  return Math.max(0, MAIL_EACH - Number(stored("um-messages", "0")));
+}
+function mailState(text = "") {
+  const left = mailLeft();
+  mail.status.textContent = text || (left ? `You can send ${left} message${left === 1 ? "" : "s"}.` : "You have sent your 2 messages. Thank you!");
+  const locked = !left;
+  mail.name.disabled = mail.text.disabled = locked;
+  mail.send.disabled = locked || ![...mail.text.value.trim()].length || !mail.name.value.trim();
+}
+function mailCount() {
+  const chars = [...mail.text.value];
+  if (chars.length > MAIL_MAX) mail.text.value = chars.slice(0, MAIL_MAX).join("");
+  mail.count.textContent = `${Math.min(chars.length, MAIL_MAX)} / ${MAIL_MAX}`;
+  mail.count.toggleAttribute("data-full", chars.length >= MAIL_MAX);
+}
+if (mail && mail.dialog) {
+  mail.open.addEventListener("click", () => {
+    mailCount();
+    mailState();
+    mail.dialog.showModal();
+    (mailLeft() ? mail.name : mail.dialog.querySelector("[data-mail-close]")).focus();
+  });
+  mail.dialog.querySelector("[data-mail-close]").addEventListener("click", () => mail.dialog.close());
+  mail.dialog.addEventListener("keydown", (event) => event.key === "Escape" && mail.dialog.close());
+  // a click on the dimmed backdrop (the dialog element itself, outside the form) closes it
+  mail.dialog.addEventListener("click", (event) => event.target === mail.dialog && mail.dialog.close());
+  mail.text.addEventListener("input", () => {
+    mailCount();
+    mailState(mail.status.dataset.keep ? mail.status.textContent : "");
+  });
+  mail.name.addEventListener("input", () => mailState());
+  mail.form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = mail.name.value.trim();
+    const message = mail.text.value.trim();
+    if (!name || !message || !mailLeft()) return;
+    mail.send.disabled = true;
+    mail.status.textContent = "Sending…";
+    try {
+      const { challenge, sig, bits } = await (await fetch(`${D.counter.url}/challenge`, { cache: "no-store" })).json();
+      const nonce = await proveOf(challenge, bits);
+      const response = await fetch(`${D.counter.url}/message`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, message, visitor: visitorId(), challenge, sig, nonce }) });
+      const result = await response.json();
+      if (result.sent) {
+        store("um-messages", String(MAIL_EACH - result.left));
+        mail.text.value = "";
+        mailCount();
+        mailState(`Sent. Thank you!${result.left ? ` You can send ${result.left} more.` : ""}`);
+      } else if (result.error === "limit") {
+        store("um-messages", String(MAIL_EACH));
+        mailState();
+      } else mailState(result.error === "busy" ? "Too many messages from your network today. Try again tomorrow." : "That did not go through. Please try again.");
+    } catch {
+      mailState("Could not send. Check your connection and try again.");
+    }
+  });
+}
+
 // v3: the parts list scrolls inside a short box with no scrollbar; its edges fade where there is more to see
 const partsList = D.v3 ? root.querySelector(".um-partsfold .um-parts") : null;
 if (partsList) {

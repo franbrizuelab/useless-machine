@@ -1,0 +1,11 @@
+[["wait", 400], ["until", "window.__um && window.__um.assembled() && window.__um.idle()", 15000],
+ ["eval", "localStorage.removeItem('um-messages'); localStorage.removeItem('um-visitor'); 1"],
+ ["scroll", ".um-foot"], ["click", "[data-mail]"], ["wait", 400],
+ ["eval", "'open: ' + document.querySelector('[data-mail-dialog]').open + ', status: ' + document.querySelector('[data-mail-status]').textContent + ', send enabled: ' + !document.querySelector('[data-mail-send]').disabled"],
+ ["eval", "(() => { const n = document.querySelector('[data-mail-name]'); n.value = 'Zoë 名前'; n.dispatchEvent(new Event('input')); const t = document.querySelector('[data-mail-text]'); t.value = 'Preview test: ça marche? こんにちは 🚀'; t.dispatchEvent(new Event('input')); return 'count: ' + document.querySelector('[data-mail-count]').textContent + ', send enabled: ' + !document.querySelector('[data-mail-send]').disabled; })()"],
+ ["shot", "shots/v3/mail.png", "[data-mail-dialog]", 1.5],
+ ["click", "[data-mail-send]"],
+ ["until", "/Sent|not|Could|Too many/.test(document.querySelector('[data-mail-status]').textContent)", 20000],
+ ["eval", "'after send: ' + document.querySelector('[data-mail-status]').textContent + ' | stored count ' + localStorage.getItem('um-messages')"],
+ ["eval", "(() => { const t = document.querySelector('[data-mail-text]'); t.value = 'x'.repeat(600); t.dispatchEvent(new Event('input')); return 'over the limit: ' + document.querySelector('[data-mail-count]').textContent + ', kept ' + [...t.value].length; })()"],
+ ["key", "Escape", "[data-mail-text]"], ["wait", 300], ["eval", "'closed by Escape: ' + !document.querySelector('[data-mail-dialog]').open"]]

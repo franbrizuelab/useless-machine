@@ -6,3 +6,5 @@ dev/preview-*.html
 snapshot-v1/
 # wrangler cache
 counter/.wrangler/
+# private inbox key for the counter Worker
+counter/.inbox-key

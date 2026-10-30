@@ -216,3 +216,28 @@
   .um-info-circuit .cc { inset: 50px 14px 14px; width: calc(100% - 28px); height: calc(100% - 64px); }
 }
 @media (prefers-reduced-motion: reduce) { .um-info-text, .um-info-piece, .um-info-circuit { transition: none; } }
+.um-foot-links { display: inline-flex; gap: 8px; }
+button.um-git { cursor: pointer; }
+.um-git svg rect, .um-git svg path[d^="m2.6"] { fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linejoin: round; }
+.um-mail { width: min(460px, calc(100% - 32px)); padding: 0; border: 0; border-radius: 14px; background: var(--anatomy-card); color: var(--anatomy-text); box-shadow: 0 0 0 1px var(--um-ink3), 0 18px 48px #0000002e; }
+.um-mail::backdrop { background: #16161a40; backdrop-filter: blur(2px); }
+.um-mail[open] { animation: um-mail-in .28s var(--anatomy-ease); }
+@keyframes um-mail-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+.um-mail-form { display: grid; gap: 14px; padding: 18px 20px 16px; }
+.um-mail-form header { display: flex; align-items: center; }
+.um-mail-form h2 { margin: 0; color: var(--anatomy-strong); font-size: 16.5px; font-weight: 600; }
+.um-mail-x { display: grid; place-items: center; width: 30px; height: 30px; margin-left: auto; padding: 0; border: 1px solid var(--um-ink3); border-radius: 9px; background: var(--anatomy-paper); color: var(--um-ink1); cursor: pointer; }
+.um-mail-x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
+.um-mail-x:hover { border-color: var(--um-ink0); color: var(--um-ink0); }
+.um-mail label { display: grid; gap: 6px; color: var(--um-ink1); font: 11.5px var(--anatomy-mono); letter-spacing: .08em; text-transform: uppercase; }
+.um-mail input, .um-mail textarea { width: 100%; padding: 9px 11px; border: 1px solid var(--um-ink3); border-radius: 9px; background: #fff; color: var(--anatomy-strong); font: 14.5px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: normal; text-transform: none; resize: vertical; }
+.um-mail textarea { min-height: 120px; }
+.um-mail input:focus, .um-mail textarea:focus { outline: none; border-color: var(--um-ink0); box-shadow: 0 0 0 3px var(--um-dim); }
+.um-mail input:disabled, .um-mail textarea:disabled { background: var(--anatomy-paper); color: var(--anatomy-muted); }
+.um-mail-foot { display: flex; align-items: center; gap: 12px; }
+.um-mail-count { color: var(--anatomy-muted); font: 12px var(--anatomy-mono); font-variant-numeric: tabular-nums; }
+.um-mail-count[data-full] { color: var(--um-ink0); font-weight: 600; }
+.um-mail-status { flex: 1; color: var(--um-ink1); font-size: 12.5px; }
+.um-mail-send { height: 34px; padding: 0 16px; border: 1px solid var(--um-ink0); border-radius: 9px; background: var(--um-ink0); color: var(--anatomy-paper); font: 600 12.5px var(--anatomy-mono); letter-spacing: .04em; cursor: pointer; }
+.um-mail-send:disabled { border-color: var(--um-ink3); background: var(--um-dim); color: var(--anatomy-muted); cursor: default; }
+@media (prefers-reduced-motion: reduce) { .um-mail[open] { animation: none; } }

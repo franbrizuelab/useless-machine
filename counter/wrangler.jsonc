@@ -1,8 +1,8 @@
 {
-  // The global flip counter for the useless machine page: a Worker in front of one Durable Object.
+  // The useless machine page's backend: the global flip counter and the message inbox, each one Durable Object.
   "name": "useless-machine-counter",
   "main": "src/index.js",
   "compatibility_date": "2025-09-01",
-  "durable_objects": { "bindings": [{ "name": "COUNTER", "class_name": "Counter" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Counter"] }]
+  "durable_objects": { "bindings": [{ "name": "COUNTER", "class_name": "Counter" }, { "name": "INBOX", "class_name": "Inbox" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Counter"] }, { "tag": "v2", "new_sqlite_classes": ["Inbox"] }]
 }
