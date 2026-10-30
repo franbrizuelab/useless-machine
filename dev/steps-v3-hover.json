@@ -1,8 +1,1 @@
-[["wait", 400], ["until", "window.__um && window.__um.assembled() && window.__um.idle()", 15000],
- ["scroll", ".um-partsfold"], ["click", ".um-part[data-c='3']"], ["wait", 200],
- ["eval", "'while over the line: info ' + document.querySelector('.um-info').hasAttribute('data-show') + ', focus ' + document.querySelector('.um-stage').hasAttribute('data-focus')"],
- ["move", ".um-foot", 0.5, 0.5], ["wait", 300],
- ["eval", "'after moving away: info ' + document.querySelector('.um-info').hasAttribute('data-show') + ', focus ' + document.querySelector('.um-stage').hasAttribute('data-focus')"],
- ["click", ".um-partsfold > summary"], ["wait", 200], ["eval", "'parts folded: ' + !document.querySelector('.um-partsfold').open"],
- ["click", ".um-manual > summary"], ["wait", 200], ["eval", "'manual folded: ' + !document.querySelector('.um-manual').open"],
- ["shot", "shots/v3/p-folded.png", ".um", 0.6]]
+[["wait", 400], ["until", "window.__um && window.__um.assembled() && window.__um.idle()", 15000], ["scroll", ".um-partsfold"], ["click", ".um-part[data-c='3']"], ["wait", 700], ["eval", "'while over the line: info ' + document.querySelector('.um-info').hasAttribute('data-show') + ', focus ' + document.querySelector('.um-stage').hasAttribute('data-focus')"], ["move", ".um-foot", 0.5, 0.5], ["wait", 300], ["eval", "'after moving away: info ' + document.querySelector('.um-info').hasAttribute('data-show') + ', focus ' + document.querySelector('.um-stage').hasAttribute('data-focus')"], ["click", ".um-partsfold > summary"], ["wait", 700], ["eval", "'parts folded: ' + !document.querySelector('.um-partsfold').open"], ["click", ".um-manual > summary"], ["wait", 700], ["eval", "'manual folded: ' + !document.querySelector('.um-manual').open"], ["shot", "shots/v3/p-folded.png", ".um", 0.6]]

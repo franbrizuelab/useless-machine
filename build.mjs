@@ -625,7 +625,7 @@ if (V3) {
     [2, { spine: [[[60, -39, 24], [60, -39, 56]]], anchor: [60, -39, 42], side: "R" }],
     // the tray front left of the limit switch, until step Y pulls the arm over it; then the tray's middle
     // the battery's plug sits on the wiring board, with the harnesses
-    [3, { match: /^battery\.(?!plug)/, spine: [[[-57, 8.75, 3.8], [-57, 8.75, 12.8]]], anchor: [-57, 8.75, 9], rides: undefined, later: { 1: { spine: [[[-20, 8.75, 4], [-20, 8.75, 9.6]]], anchor: [-20, 8.75, 6.8] } } }],
+    [3, { match: /^battery\.(?!plug)/, only: /^battery\.cell/, spine: [[[-57, 8.75, 3.8], [-57, 8.75, 12.8]]], anchor: [-57, 8.75, 9], rides: undefined, later: { 1: { spine: [[[-20, 8.75, 4], [-20, 8.75, 9.6]]], anchor: [-20, 8.75, 6.8] } } }],
     [4, { spine: [[[MOTOR[0] + 6, -9, MOTOR[1] - 6.5], [MOTOR[0] + 6, -9, MOTOR[1] + 6.5]]], anchor: [MOTOR[0] + 6, -9, MOTOR[1]] }],
     [5, { spine: [[[33, M.Y.g1[1], 28], [33, M.Y.g1[1], 44]]], anchor: [33, M.Y.g1[1], 36] }],
     [6, { spine: [[[54, M.Y.plate[1], 8], [54, M.Y.plate[1], 44]]], anchor: [54, M.Y.plate[1], 20] }],
@@ -671,27 +671,27 @@ function gearShapes(name) {
   const [cx, cz] = M.CENTRE[name === "second" ? "stage" : name];
   const layer = name === "pinion" || name === "stage" ? M.Y.g1 : M.Y.g2;
   const F = [[cx, 0, cz], [0, 1, 0], [1, 0, 0], [0, 0, 1]];
-  const loop = (x, z, r, n) => Array.from({ length: n }, (_, i) => [x + r * Math.cos((i / n) * 2 * Math.PI), layer[1], z + r * Math.sin((i / n) * 2 * Math.PI)]);
-  const decals = spec.teeth === 24 ? [loop(cx, cz, 2.4, 16), ...Array.from({ length: 6 }, (_, i) => loop(cx + 8.4 * Math.cos((i / 6) * 2 * Math.PI), cz + 8.4 * Math.sin((i / 6) * 2 * Math.PI), 2.8, 14))] : [loop(cx, cz, 1.4, 12)];
-  return { shapes: [{ k: "p", F, poly: round2(gearPoly(spec.teeth, M.GEAR.module, spec.phase)), s: round2(layer) }], decals: [{ n: [0, 1, 0], loops: round2(decals) }] };
+  const loop = (x, z, r, n, y) => Array.from({ length: n }, (_, i) => [x + r * Math.cos((i / n) * 2 * Math.PI), y, z + r * Math.sin((i / n) * 2 * Math.PI)]);
+  const rings = (y) => (spec.teeth === 24 ? [loop(cx, cz, 2.4, 16, y), ...Array.from({ length: 6 }, (_, i) => loop(cx + 8.4 * Math.cos((i / 6) * 2 * Math.PI), cz + 8.4 * Math.sin((i / 6) * 2 * Math.PI), 2.8, 14, y))] : [loop(cx, cz, 1.4, 12, y)]);
+  return { shapes: [{ k: "p", F, poly: round2(gearPoly(spec.teeth, M.GEAR.module, spec.phase)), s: round2(layer) }], decals: [{ n: [0, 1, 0], loops: round2(rings(layer[1])) }, { n: [0, -1, 0], loops: round2(rings(layer[0])) }] };
 }
-function coilShape(spring) {
-  const points = [];
-  const steps = Math.round(HINGE.turns * 20);
-  for (let i = 0; i <= steps; i++) {
-    const t = (i / steps) * HINGE.turns * 2 * Math.PI;
-    points.push([spring.x[0] + ((spring.x[1] - spring.x[0]) * i) / steps, DOOR.hy + HINGE.coilR * Math.cos(t), DOOR.hz + HINGE.coilR * Math.sin(t)]);
-  }
-  return { k: "t", points: round2(points), radii: points.map(() => 0.16) };
+// a coil wraps its pin, so it goes out in half-turns: each half sorts against the pin on its own side
+function coilShapes(spring) {
+  const halves = Math.round(HINGE.turns * 2);
+  const at = (t) => [spring.x[0] + ((spring.x[1] - spring.x[0]) * t) / (HINGE.turns * 2 * Math.PI), DOOR.hy + HINGE.coilR * Math.cos(t), DOOR.hz + HINGE.coilR * Math.sin(t)];
+  return Array.from({ length: halves }, (_, h) => {
+    const points = Array.from({ length: 11 }, (_, i) => at(((h + i / 10) * HINGE.turns * 2 * Math.PI) / halves));
+    return { k: "t", points: round2(points), radii: points.map(() => 0.16) };
+  });
 }
 function pieceShapes(call) {
   return R.items
-    .filter((item) => item.calls.includes(call.id))
+    .filter((item) => item.calls.includes(call.id) && (!call.only || call.only.test(item.name)))
     .map((item) => {
       const gear = /^mech\.gear\.(\w+)$/.exec(item.name);
       const spring = /^lid\.spring(\d)$/.exec(item.name);
       const own = gear ? gearShapes(gear[1]) : { shapes: item.shapes.map(shapeOut).filter(Boolean), decals: [] };
-      if (spring) own.shapes.push(coilShape(HINGE.springs[Number(spring[1])]));
+      if (spring) own.shapes.push(...coilShapes(HINGE.springs[Number(spring[1])]));
       return { tone: toneOf(item.svg), glass: item.svg.includes("um-glass"), ...own };
     })
     .filter((part) => part.shapes.length);

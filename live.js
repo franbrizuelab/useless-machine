@@ -963,10 +963,15 @@ function meshOf(parts) {
   };
   // soft faces (tubes) draw only their silhouettes: a cable is many short chunks, and a crease at every joint and
   // end cap would string it with rings
-  const face = (idx, n, part, shape, soft = false) => faces.push({ idx, n: norm3(n), part, shape, soft });
+  const groups = [];
+  const face = (idx, n, part, shape, soft = false) => {
+    faces.push({ idx, n: norm3(n), part, shape, soft });
+    groups[groups.length - 1].faces.push(faces.length - 1);
+  };
   parts.forEach((part, p) => {
     part.shapes.forEach((sh, si) => {
       const shape = `${p}.${si}`;
+      groups.push({ kind: sh.k, part: p, faces: [], decals: [] });
       if (sh.k === "p") {
         const [o, a, u, v] = sh.F;
         const at = ([x, y], s) => [0, 1, 2].map((i) => o[i] + a[i] * s + u[i] * x + v[i] * y);
@@ -978,6 +983,7 @@ function meshOf(parts) {
         const b1 = add(sh.poly.map((q) => at(q, sh.s[1])));
         face(sh.poly.map((_, i) => b0 + i), a.map((x) => -x), p, shape);
         face(sh.poly.map((_, i) => b1 + i), a, p, shape);
+        groups[groups.length - 1].caps = [faces.length - 2, faces.length - 1];
         for (let i = 0; i < n; i++) {
           const j = (i + 1) % n;
           const dx = sh.poly[j][0] - sh.poly[i][0];
@@ -1046,8 +1052,12 @@ function meshOf(parts) {
         faces[faces.length - 1].cap = faces[faces.length - 2].cap = true;
       }
     });
+    const host = groups.find((g) => g.part === p);
     for (const decal of part.decals)
-      for (const loop of decal.loops) faces.push({ idx: Array.from({ length: loop.length }, (_, i) => add([loop[i]])), n: decal.n, part: p, decal: true });
+      for (const loop of decal.loops) {
+        faces.push({ idx: Array.from({ length: loop.length }, (_, i) => add([loop[i]])), n: decal.n, part: p, decal: true });
+        host.decals.push(faces.length - 1);
+      }
   });
   // neighbours across each edge, within a shape, for silhouettes and creases
   const owner = new Map();
@@ -1068,7 +1078,39 @@ function meshOf(parts) {
   const zs = verts.map((v) => v[2]);
   const c = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2, (Math.min(...zs) + Math.max(...zs)) / 2];
   const R = Math.max(...verts.map((v) => Math.hypot(v[0] - c[0], v[1] - c[1])));
-  return { verts, faces, parts, c, R, zh: (Math.max(...zs) - Math.min(...zs)) / 2 };
+  // each shape's vertices and box, for ordering whole shapes
+  for (const g of groups) {
+    g.verts = [...new Set(g.faces.flatMap((fi) => faces[fi].idx))];
+    g.min = [0, 1, 2].map((k) => Math.min(...g.verts.map((v) => verts[v][k])));
+    g.max = [0, 1, 2].map((k) => Math.max(...g.verts.map((v) => verts[v][k])));
+    g.mid = [0, 1, 2].map((k) => (g.min[k] + g.max[k]) / 2);
+  }
+  return { verts, faces, parts, c, R, zh: (Math.max(...zs) - Math.min(...zs)) / 2, groups, planes: new Map() };
+}
+// A plane with one shape on each side decides which is in front from any direction, so it is found once per pair
+// (the first time the two overlap on screen) and kept: a plane between their boxes along an axis, else one of either
+// shape's own face planes. Pairs without one (gears meshing in one layer) fall back to their centres' depths.
+const SEP_EPS = 0.06;
+function separationOf(mesh, A, B) {
+  for (let k = 0; k < 3; k++) {
+    const n = [0, 0, 0];
+    n[k] = 1;
+    if (A.max[k] <= B.min[k] + SEP_EPS) return { n, back: "A" };
+    if (B.max[k] <= A.min[k] + SEP_EPS) return { n, back: "B" };
+  }
+  const dot = (n, v) => n[0] * v[0] + n[1] * v[1] + n[2] * v[2];
+  const outside = (own, other, name) => {
+    const seen = [];
+    for (const fi of own.faces) {
+      const f = mesh.faces[fi];
+      if (seen.some((m) => m[0] * f.n[0] + m[1] * f.n[1] + m[2] * f.n[2] > 0.9999)) continue;
+      seen.push(f.n);
+      const d = dot(f.n, mesh.verts[f.idx[0]]);
+      if (own.verts.every((v) => dot(f.n, mesh.verts[v]) <= d + SEP_EPS) && other.verts.every((v) => dot(f.n, mesh.verts[v]) >= d - SEP_EPS)) return { n: f.n, back: name };
+    }
+    return null;
+  };
+  return outside(A, B, "A") || outside(B, A, "B");
 }
 const pieceBox = {
   view: root.querySelector("[data-piece-view]"),
@@ -1122,31 +1164,78 @@ function drawPiece() {
     const t = turned(f.n);
     return { t, front: t[0] * V[0] + t[1] * V[1] + t[2] * V[2] > 1e-4 };
   });
-  const order = [];
-  mesh.faces.forEach((f, fi) => {
-    if (!facing[fi].front) return;
+  const depthOfFace = (fi) => {
     let d = 0;
-    for (const i of f.idx) d += Dp[i];
-    order.push([d / f.idx.length + (f.decal ? 0.05 : 0), fi]);
+    for (const i of mesh.faces[fi].idx) d += Dp[i];
+    return d / mesh.faces[fi].idx.length;
+  };
+  // the view direction in the piece's own (unturned) frame
+  const Vo = [V[0] * ca + V[1] * sa, -V[0] * sa + V[1] * ca, V[2]];
+  const shown = [];
+  mesh.groups.forEach((g, gi) => {
+    if (!g.faces.some((fi) => facing[fi].front)) return;
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const v of g.verts) {
+      if (X[v] < x0) x0 = X[v];
+      if (X[v] > x1) x1 = X[v];
+      if (Y[v] < y0) y0 = Y[v];
+      if (Y[v] > y1) y1 = Y[v];
+    }
+    const m = g.mid;
+    const mx = m[0] - cx;
+    const my = m[1] - cy;
+    shown.push({ gi, box: [x0, y0, x1, y1], depth: (mx * ca - my * sa) * cosA * cosE + (mx * sa + my * ca) * sinA * cosE + (m[2] - cz) * sinE, after: [], before: 0 });
   });
-  order.sort((a, b) => a[0] - b[0]);
+  for (let i = 0; i < shown.length; i++)
+    for (let j = i + 1; j < shown.length; j++) {
+      const a = shown[i];
+      const b = shown[j];
+      if (a.box[2] < b.box[0] || b.box[2] < a.box[0] || a.box[3] < b.box[1] || b.box[3] < a.box[1]) continue;
+      const key = `${a.gi}:${b.gi}`;
+      if (!mesh.planes.has(key)) mesh.planes.set(key, separationOf(mesh, mesh.groups[a.gi], mesh.groups[b.gi]));
+      const plane = mesh.planes.get(key);
+      let aFirst;
+      if (plane) {
+        const toward = plane.n[0] * Vo[0] + plane.n[1] * Vo[1] + plane.n[2] * Vo[2];
+        if (Math.abs(toward) < 1e-6) continue;
+        // the shape on the plane's back side is drawn first when the viewer is on its front side
+        aFirst = (plane.back === "A") === toward > 0;
+      } else aFirst = a.depth < b.depth;
+      const [first, next] = aFirst ? [a, b] : [b, a];
+      first.after.push(next);
+      next.before++;
+    }
+  // far to near: shapes with nothing left to wait for, farthest first; a cycle falls back to depth
+  const ready = shown.filter((g) => !g.before);
+  const order = [];
+  const left = new Set(shown);
+  while (left.size) {
+    let pick = null;
+    for (const g of ready) if (left.has(g) && (!pick || g.depth < pick.depth)) pick = g;
+    if (!pick) for (const g of left) if (!pick || g.depth < pick.depth) pick = g;
+    left.delete(pick);
+    order.push(pick);
+    for (const g of pick.after) if (--g.before <= 0 && left.has(g)) ready.push(g);
+  }
   const { fill, line } = turner.colours;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
-  for (const [, fi] of order) {
+  const paintFace = (fi) => {
     const f = mesh.faces[fi];
     const part = mesh.parts[f.part];
     const path = new Path2D();
     f.idx.forEach((i, m) => (m ? path.lineTo(X[i], Y[i]) : path.moveTo(X[i], Y[i])));
+    path.closePath();
     if (f.decal) {
-      path.closePath();
       ctx.globalAlpha = 1;
       ctx.lineWidth = 0.7 / z;
       ctx.strokeStyle = line.lo;
       ctx.stroke(path);
-      continue;
+      return;
     }
-    path.closePath();
     const t = facing[fi].t;
     const score = t[0] * L[0] + t[1] * L[1] + t[2] * L[2];
     let band = 0;
@@ -1175,6 +1264,16 @@ function drawPiece() {
       ctx.strokeStyle = line[part.tone] || line.mid;
       ctx.stroke(edges);
     }
+  };
+  for (const { gi } of order) {
+    const g = mesh.groups[gi];
+    // an extrusion is drawn sides first and its near cap last: that is exact for any prism, toothed or bent
+    const caps = g.caps || [];
+    const sides = g.faces.filter((fi) => facing[fi].front && !caps.includes(fi)).map((fi) => [depthOfFace(fi), fi]);
+    sides.sort((p, q) => p[0] - q[0]);
+    for (const [, fi] of sides) paintFace(fi);
+    for (const fi of caps) if (facing[fi].front) paintFace(fi);
+    for (const fi of g.decals) if (facing[fi].front) paintFace(fi);
   }
 }
 function spinPiece() {
@@ -1220,6 +1319,18 @@ if (pieceBox.view) {
     pieceBox.bolt.setAttribute("aria-label", on ? "Show the pieces again" : "Show the circuit");
     spinPiece();
   });
+}
+
+// v3: the parts list scrolls inside a short box with no scrollbar; its edges fade where there is more to see
+const partsList = D.v3 ? root.querySelector(".um-partsfold .um-parts") : null;
+if (partsList) {
+  const edges = () => {
+    partsList.toggleAttribute("data-more-above", partsList.scrollTop > 2);
+    partsList.toggleAttribute("data-more-below", partsList.scrollTop + partsList.clientHeight < partsList.scrollHeight - 2);
+  };
+  partsList.addEventListener("scroll", edges, { passive: true });
+  new ResizeObserver(edges).observe(partsList);
+  edges();
 }
 
 // v3: the parts list and the manual fold open and shut with their height eased, not snapped
