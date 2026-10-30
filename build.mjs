@@ -755,6 +755,31 @@ const caption = V3
   : V2
   ? "The toggle is a DPDT switch wired across a DC motor. Flipped on, it sends the battery to the motor one way: the arm rises, pushes the door open and rests against it, and its pin pushes the lever back over centre. That reverses the motor through the limit switch, so the arm retracts, the door's torsion springs pull it shut behind it, and the arm settles on the limit switch's leaf, which opens the circuit. Every lead plugs into a small board on the base. Front and right walls removed. It comes apart in three steps, one per axis: the lid, mechanism and battery lift along Z; the arm and gears slide off their shafts along Y; the clip and cells slide out along X."
   : "The toggle is a DPDT switch wired across a DC motor. Flipped on, it sends the battery to the motor one way and the arm rises. The arm's pin pushes the lever back over centre, which reverses the motor through the limit switch. The arm retracts until it sits on the limit switch's leaf, which opens the circuit and stops it. Front and right walls removed; the lid, mechanism and battery pack separate along the vertical axis.";
+// v3's text under the figure is an owner's manual. Its numbers come from the model and a few stated part ratings: the
+// motor runs about 2.3 s per use (measured in the page), the toggle is rated for 25,000 operations and every use flips
+// it twice, the motor is assumed to draw about 0.3 A, and an alkaline AA gives about 1,800 mAh at that drain.
+const USE = { motor: 2.3, amps: 0.3, alkaline: 1800, toggle: 25000, limit: 1000000, brushHours: 500, perDay: 10 };
+const usesPerSet = Math.round((USE.alkaline * 3.6) / (USE.motor * USE.amps) / 100) * 100;
+const lifeUses = USE.toggle / 2;
+const lifeDays = lifeUses / USE.perDay;
+const lifeYears = Math.floor(lifeDays / 365.25);
+const lifeMonths = Math.round((lifeDays / 365.25 - lifeYears) * 12);
+const brushUses = Math.round((USE.brushHours * 3600) / USE.motor / 10000) * 10000;
+const speed = Math.round(M.SPEED / M.RAD);
+const nimh = Math.round((speed * 3.6) / M.VOLTS);
+const fmt = (n) => n.toLocaleString("en-US");
+const MANUAL = [
+  ["Operation", "Flip the switch. The machine flips it back. Repeat as often as you like: it will not get bored, but it will wear out (see Service life)."],
+  ["Batteries", `3 × AA alkaline (LR6) in series, 4.5 V. Change all three together and never mix brands or ages. NiMH rechargeables (3.6 V in all) work, but the arm swings ${100 - Math.round((100 * 3.6) / M.VOLTS)}% slower: ${nimh}° a second instead of ${speed}°. Never fit 14500 lithium-ion cells: they are AA-sized, give 11.1 V and will cook the motor. A fresh set lasts about ${fmt(usesPerSet)} uses (${USE.motor} s of motor at about ${USE.amps} A each). At rest it draws nothing, because the limit switch opens the circuit.`],
+  ["Lubrication", "Every 2,000 uses, a thin film of PTFE silicone grease on the gear teeth (some petroleum greases soften plastic gears) and one drop of sewing-machine oil on the door's hinge pin. The motor's bearings are sealed: leave them dry. No WD-40: it is a solvent, and it washes the grease out."],
+  ["Service life", `${fmt(lifeUses)} uses. The weak point is the toggle switch, rated for ${fmt(USE.toggle)} operations, and every use costs two: your flip and the arm's. At ${USE.perDay} uses a day that is about ${lifeYears} years and ${lifeMonths} months. The limit switch (${fmt(USE.limit)} operations) and the motor's brushes (about ${fmt(brushUses)} uses) will outlive it.`],
+  ["Troubleshooting", "Arm stops short of the lever: batteries below 1.1 V a cell. Arm reaches the lever but cannot flip it: NiMH cells, or grease on the lever. Door stays open: a torsion spring has slipped off its rivet. Arm comes out on its own: the play button in the corner is on."],
+  ["Warranty", `12 months or ${fmt(lifeUses)} uses, whichever comes first. Void if the machine is used for anything useful.`],
+];
+const REPO = "https://github.com/franbrizuelab/useless-machine";
+const GITHUB_MARK = "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z";
+const manual = `<section class="um-manual" aria-labelledby="um-manual-title"><header class="um-manual-head"><h2 id="um-manual-title">Owner's manual</h2><span>Model UM-3 · 4.5 V</span></header><dl class="um-manual-list">${MANUAL.map(([term, text]) => `<div><dt>${term}</dt><dd>${text}</dd></div>`).join("")}</dl></section>`;
+const footer = `<footer class="um-foot"><span>Useless machine · model UM-3</span><a class="um-git" href="${REPO}" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${GITHUB_MARK}"/></svg>GitHub</a></footer>`;
 const stageLabel = V3
   ? "Useless machine. Space or Enter flips the switch, E steps through the take-apart stages, the arrow keys step through the parts, Escape clears."
   : V2
@@ -762,7 +787,7 @@ const stageLabel = V3
     : "Useless machine. Space or Enter flips the switch, E takes it apart, the arrow keys step through the parts, Escape clears.";
 let plate = k.plateHtml({ fig: "Fig 1", title: "Useless machine", hint: V3 ? "" : "Click the switch", readout: V3 ? "" : "ready", keys: [], caption: "", body: `<div class="iso-stage um-stage" tabindex="0" role="group" aria-label="${stageLabel}">${V3 ? `<div class="um-view">${svg}</div>` : svg}</div>${corners}` });
 if (V3) plate = plate.replace(/<span class="iso-plate-corner" data-corner="readout"[^>]*><\/span>/, "");
-const body = `<div class="um${V3 ? " um3" : ""}">${plate.replace("</div></figure>", `</div>${controls}</figure>`)}<div class="um-below"><div class="um-circuit">${circuit}</div><ol class="um-parts">${parts}</ol></div><p class="iso-caption um-caption">${caption}</p></div>`;
+const body = `<div class="um${V3 ? " um3" : ""}">${plate.replace("</div></figure>", `</div>${controls}</figure>`)}<div class="um-below"><div class="um-circuit">${circuit}</div><ol class="um-parts">${parts}</ol></div>${V3 ? manual + footer : `<p class="iso-caption um-caption">${caption}</p>`}</div>`;
 const SITE = "https://franbrizuelab.github.io/useless-machine/";
 const PREVIEW = {
   title: "Useless machine",

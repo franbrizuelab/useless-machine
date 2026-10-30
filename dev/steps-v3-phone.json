@@ -1,3 +1,1 @@
-[["wait", 400], ["until", "window.__um && window.__um.idle()", 8000], ["wait", 300],
- ["shot", "shots/v3/phone.png", ".iso-figure", 2],
- ["eval", "window.__um.select('11'); 1"], ["wait", 500], ["shot", "shots/v3/phone-info.png", ".um-info", 2]]
+[["wait", 400], ["until", "window.__um && window.__um.assembled() && window.__um.idle()", 15000], ["wait", 300], ["shot", "shots/v3/phone.png", ".iso-figure", 2], ["eval", "window.__um.select('11'); 1"], ["wait", 500], ["shot", "shots/v3/phone-info.png", ".um-info", 2]]

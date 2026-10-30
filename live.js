@@ -476,6 +476,14 @@ const springsMoving = () => springs.some((group) => Object.values(group).some((o
 const stepsOut = () => goals.filter(Boolean).length;
 let apart = false;
 let wantApart = false;
+// v3 opens fully apart and, a second after the figure first comes into view, puts itself together; from then on only
+// the reader moves it, and any input before that second is up cancels it.
+let openPending = false;
+let opening = 0;
+function userTook() {
+  openPending = false;
+  clearTimeout(opening);
+}
 
 function setStep(target) {
   stepTarget = clampTo(target, 0, STEPS.length);
@@ -525,7 +533,10 @@ function driveSteps() {
 }
 
 function flip(fromTour = false) {
-  if (!fromTour) lastInput = now();
+  if (!fromTour) {
+    lastInput = now();
+    userTook();
+  }
   if (apart || stepTarget > 0 || !assembled()) {
     pendingFlip = true;
     setApart(false);
@@ -578,7 +589,8 @@ function showInfo(id) {
   }
   info.shown = call ? call.id : null;
   infoBox.toggleAttribute("data-show", Boolean(call));
-  info.empty.textContent = showCalls ? "Hover over a number to see information about the piece." : "Numbers are hidden. Turn them on with the i button to see information about each piece.";
+  const touch = matchMedia("(hover: none)").matches;
+  info.empty.textContent = showCalls ? `${touch ? "Tap" : "Hover over"} a number to see information about the piece.` : "Numbers are hidden. Turn them on with the i button to see information about each piece.";
 }
 
 function say(text) {
@@ -699,6 +711,7 @@ function afterIdle() {
   }, wait);
 }
 function setAuto(on) {
+  userTook();
   auto = on;
   if (autoBtn) {
     autoBtn.setAttribute("aria-pressed", String(on));
@@ -723,6 +736,10 @@ new IntersectionObserver(
   (entries) => {
     visible = entries[entries.length - 1].isIntersecting;
     if (visible) {
+      if (openPending) {
+        openPending = false;
+        opening = setTimeout(() => setStep(0), 1000);
+      }
       run();
       afterIdle();
     }
@@ -743,6 +760,7 @@ if (apartBtn)
 stepButtons.forEach((button) =>
   button.addEventListener("click", () => {
     lastInput = now();
+    userTook();
     const n = Number(button.dataset.step);
     setStep(stepTarget === n ? 0 : n);
   }),
@@ -775,6 +793,7 @@ for (const call of calls) {
 }
 stage.addEventListener("keydown", (event) => {
   lastInput = now();
+  userTook();
   const key = event.key;
   const current = selected ? Number(selected) : 0;
   if (key === " " || key === "Enter") {
@@ -797,6 +816,12 @@ stage.addEventListener("keydown", (event) => {
   }
 });
 
+if (D.v3 && STEPS.length > 1) {
+  for (const group of springs) for (const one of Object.values(group)) Object.assign(one, { x: 1, v: 0, target: 1, pending: null });
+  goals.fill(1);
+  stepTarget = STEPS.length;
+  apart = wantApart = openPending = true;
+}
 readScale();
 paintDynamic();
 paintCircuit();
@@ -805,6 +830,7 @@ say(status());
 describe();
 labelApart();
 showInfo(null);
+stage.setAttribute("data-ready", "");
 // v3 zoom: a pinch on a touch screen, a trackpad pinch or Ctrl + wheel over the drawing zooms into it, up to ZOOM_MAX,
 // around the fingers or the pointer. The page itself does not zoom. When the gesture ends the drawing eases back to
 // its normal size. The card clips it, and a thin mask fades it out before the card's edge.
