@@ -759,9 +759,17 @@ const stageLabel = V3
 let plate = k.plateHtml({ fig: "Fig 1", title: "Useless machine", hint: V3 ? "" : "Click the switch", readout: V3 ? "" : "ready", keys: [], caption: "", body: `<div class="iso-stage um-stage" tabindex="0" role="group" aria-label="${stageLabel}">${svg}</div>${corners}` });
 if (V3) plate = plate.replace(/<span class="iso-plate-corner" data-corner="readout"[^>]*><\/span>/, "");
 const body = `<div class="um${V3 ? " um3" : ""}">${plate.replace("</div></figure>", `</div>${controls}</figure>`)}<div class="um-below"><div class="um-circuit">${circuit}</div><ol class="um-parts">${parts}</ol></div><p class="iso-caption um-caption">${caption}</p></div>`;
+const SITE = "https://franbrizuelab.github.io/useless-machine/";
+const PREVIEW = {
+  title: "Useless machine",
+  say: "An interactive cutaway: flip the toggle and an arm pushes open a door in the lid, flips the switch back off and retracts. Take it apart stage by stage.",
+  alt: "Isometric cutaway of a clear acrylic box: the arm has pushed the lid's door open and is flipping the toggle switch back off.",
+};
+const previewTags = (url) =>
+  `<meta name="description" content="${PREVIEW.say}"><meta property="og:type" content="website"><meta property="og:site_name" content="${PREVIEW.title}"><meta property="og:title" content="${PREVIEW.title}"><meta property="og:description" content="${PREVIEW.say}"><meta property="og:url" content="${url}"><meta property="og:image" content="${SITE}preview.jpg"><meta property="og:image:type" content="image/jpeg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="${PREVIEW.alt}"><meta name="twitter:card" content="summary_large_image">`;
 let page = k.pageHtml({ title: "Useless machine", theme: THEME, body: `<style>${css}</style>${body}`, script, width: V3 ? 1100 : 1000 });
-// v3 drops the page's empty band above the card
-if (V3) page = page.replace("margin:64px auto 96px", "margin:16px auto 64px");
+// v3 drops the page's empty band above the card, and carries the link-preview tags (WhatsApp, Slack, social cards)
+if (V3) page = page.replace("margin:64px auto 96px", "margin:16px auto 64px").replace("<title>Useless machine</title>", `<title>Useless machine</title>${previewTags(SITE + pageName(3))}`);
 writeFileSync(join(HERE, pageName(VER)), page);
 console.log("wrote", `${R.items.length} items`, `${(page.length / 1024).toFixed(0)} KB`, `fit ${fit.toFixed(2)}`);
 const first = A.auditOrExit(R, P, { crowd: CROWD_OK });
