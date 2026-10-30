@@ -747,11 +747,46 @@ new IntersectionObserver(
   { rootMargin: "120px 0px" },
 ).observe(stage);
 
+// v3: the number of flips visitors have made, everywhere, from the counter Worker. It appears once the first read
+// succeeds and refreshes every 30 s while the figure is on screen. Only flips made by hand on the published page are
+// posted, so local copies and automated checks never add to it.
+const odo = D.counter ? { el: root.querySelector("[data-odo]"), n: root.querySelector("[data-odo-n]"), s: root.querySelector("[data-odo-s]"), count: 0, read: 0 } : null;
+function showCount(count) {
+  if (!odo || typeof count !== "number" || count < odo.count) return;
+  odo.count = count;
+  odo.n.textContent = count.toLocaleString("en-US");
+  odo.s.hidden = count === 1;
+  odo.el.hidden = false;
+}
+async function readCount() {
+  try {
+    const response = await fetch(`${D.counter.url}/count`, { cache: "no-store" });
+    showCount((await response.json()).count);
+  } catch {}
+}
+async function postFlip() {
+  if (!odo || location.origin !== D.counter.site) return;
+  try {
+    const response = await fetch(`${D.counter.url}/flip`, { method: "POST" });
+    showCount((await response.json()).count);
+  } catch {}
+}
+if (odo) {
+  readCount();
+  odo.read = setInterval(() => visible && document.visibilityState === "visible" && readCount(), 30000);
+}
+// a flip by hand: counted when it starts a cycle (or queues one behind closing up)
+function handFlip() {
+  const started = st.th < 0 || pendingFlip;
+  flip();
+  if (!started && (st.th < 0 || pendingFlip)) postFlip();
+}
+
 hit.addEventListener("pointerdown", (event) => {
   event.preventDefault();
-  flip();
+  handFlip();
 });
-flipBtn.addEventListener("click", () => flip());
+flipBtn.addEventListener("click", () => handFlip());
 if (apartBtn)
   apartBtn.addEventListener("click", () => {
     lastInput = now();
@@ -798,7 +833,7 @@ stage.addEventListener("keydown", (event) => {
   const current = selected ? Number(selected) : 0;
   if (key === " " || key === "Enter") {
     event.preventDefault();
-    flip();
+    handFlip();
   } else if (key === "e" || key === "E") {
     nextStep();
   } else if (key === "ArrowRight" || key === "ArrowDown") {

@@ -4,3 +4,5 @@ dev/*.txt
 dev/preview-*.html
 # the pre-git copy of v1; the first commit holds the same files
 snapshot-v1/
+# wrangler cache
+counter/.wrangler/

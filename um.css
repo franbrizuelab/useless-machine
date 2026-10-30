@@ -164,3 +164,8 @@
 .um-git:hover { border-color: var(--um-ink0); background: #fff; }
 .um-git:focus-visible { outline: 1px solid var(--um-ink0); outline-offset: 2px; }
 @media (max-width: 760px) { .um-manual { padding: 16px 16px 6px; } .um-manual-list div { grid-template-columns: 1fr; gap: 4px; } }
+.um-manual-last { margin: 4px 0 0; padding: 10px 0 8px; border-top: 1px solid var(--um-dim); color: var(--anatomy-muted); font: 11.5px var(--anatomy-mono); letter-spacing: .03em; }
+.um-odo { position: absolute; z-index: 3; bottom: 24px; left: 50%; transform: translateX(-50%); color: var(--anatomy-muted); font: 11.5px var(--anatomy-mono); letter-spacing: .05em; white-space: nowrap; pointer-events: none; }
+.um-odo[hidden] { display: none; }
+.um-odo b { color: var(--um-ink0); font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) { .um-odo { bottom: 6px; font-size: 10px; } }

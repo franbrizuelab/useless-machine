@@ -35,3 +35,13 @@ point to it with Open Graph tags. To redraw it after a change:
 node ~/.claude/skills/anatomy/scripts/drive.mjs useless-machine-v3-light.html --actions dev/steps-preview.json
 magick shots/v3/og-raw.png -resize x630 -background "#fbfbfa" -gravity center -extent 1200x630 -strip -quality 90 -sampling-factor 4:4:4 preview.jpg
 ```
+
+## Flip counter
+
+The "flips undone worldwide" count comes from a small Cloudflare Worker in `counter/`: one Durable Object holds the
+count, `GET /count` reads it and `POST /flip` adds one. Only flips made by hand on the published page are posted, at
+most one every 1.5 s per address, and addresses are not stored. To deploy a change:
+
+```sh
+cd counter && npx wrangler deploy
+```
