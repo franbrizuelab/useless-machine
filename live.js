@@ -1363,7 +1363,8 @@ function mailLeft() {
 }
 function mailState(text = "") {
   const left = mailLeft();
-  mail.status.textContent = text || (left ? `You can send ${left} message${left === 1 ? "" : "s"}.` : "You have sent your 2 messages. Thank you!");
+  // the form says nothing about how many are left; it only says so once there are none
+  mail.status.textContent = text || (left ? "" : "No more messages available.");
   const locked = !left;
   mail.name.disabled = mail.text.disabled = locked;
   mail.send.disabled = locked || ![...mail.text.value.trim()].length || !mail.name.value.trim();
@@ -1406,7 +1407,7 @@ if (mail && mail.dialog) {
         store("um-messages", String(MAIL_EACH - result.left));
         mail.text.value = "";
         mailCount();
-        mailState(`Sent. Thank you!${result.left ? ` You can send ${result.left} more.` : ""}`);
+        mailState(result.left ? "Sent. Thank you!" : "Sent. Thank you! No more messages available.");
       } else if (result.error === "limit") {
         store("um-messages", String(MAIL_EACH));
         mailState();
