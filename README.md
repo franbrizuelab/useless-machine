@@ -33,5 +33,5 @@ point to it with Open Graph tags. To redraw it after a change:
 
 ```sh
 node ~/.claude/skills/anatomy/scripts/drive.mjs useless-machine-v3-light.html --actions dev/steps-preview.json
-magick shots/v3/og-raw.png -strip -quality 90 -sampling-factor 4:4:4 preview.jpg
+magick shots/v3/og-raw.png -resize x630 -background "#fbfbfa" -gravity center -extent 1200x630 -strip -quality 90 -sampling-factor 4:4:4 preview.jpg
 ```

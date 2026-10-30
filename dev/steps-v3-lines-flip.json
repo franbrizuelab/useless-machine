@@ -1,0 +1,2 @@
+[["wait", 400], ["until", "window.__um && window.__um.idle()", 8000],
+ ["eval", "window.__um.flip(); 1"], ["wait", 150], ["lines", null, ".um-stage"], ["wait", 150], ["lines", null, ".um-stage"], ["wait", 150], ["lines", null, ".um-stage"], ["wait", 150], ["lines", null, ".um-stage"], ["wait", 150], ["lines", null, ".um-stage"], ["wait", 150], ["lines", null, ".um-stage"], ["wait", 150], ["lines", null, ".um-stage"], ["wait", 150], ["lines", null, ".um-stage"], ["wait", 150], ["lines", null, ".um-stage"], ["wait", 150], ["lines", null, ".um-stage"]]

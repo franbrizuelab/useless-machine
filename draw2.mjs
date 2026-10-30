@@ -70,7 +70,8 @@ const solidList = (paths, tone) => [
 ];
 const lineOf = (d, t = "lo") => ({ c: "iso-line", t, d });
 
-export function doorPart(P, alpha) {
+// hooks: v3 ends each spring leg on a rivet dot where it bears on the door's leaf
+export function doorPart(P, alpha, { hooks = false } = {}) {
   const F = doorFrame(alpha);
   const top = DOOR.z1;
   const leafTop = top + HINGE.doorLeaf.h;
@@ -79,6 +80,7 @@ export function doorPart(P, alpha) {
   const screws = SCREW_X.map((x) => on(x, 29.55, leafTop));
   const ring = (cx, cy, r, s) => pathOf(Array.from({ length: 14 }, (_, i) => on(cx + r * Math.cos((i / 14) * Math.PI * 2), cy + r * Math.sin((i / 14) * Math.PI * 2), s)), true);
   const legs = HINGE.springs.map((spring) => pathOf([on(spring.x[1], DOOR.hy - HINGE.coilR, DOOR.hz), on(spring.x[1], HINGE.doorLeaf.y[0] + 0.7, leafTop + 0.05)]));
+  const hookDots = hooks ? HINGE.springs.map((spring) => on(spring.x[1], HINGE.doorLeaf.y[0] + 0.7, leafTop + 0.05)) : [];
   return {
     groups: [
       { cls: "um-glass", solid: solidList(slabIn(DOOR_RING, F, DOOR.z0, DOOR.z1, P), "hi") },
@@ -89,7 +91,7 @@ export function doorPart(P, alpha) {
       lineOf(SCREW_X.map((x) => ring(x, 29.55, 0.75, leafTop)).join(""), "lo"),
       lineOf(legs.join(""), "mid"),
     ],
-    dots: screws,
+    dots: [...screws, ...hookDots],
   };
 }
 

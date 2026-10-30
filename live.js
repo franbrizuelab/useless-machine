@@ -70,18 +70,18 @@ const now = () => performance.now();
 
 function paintDynamic() {
   if (st.phi !== lastPhi) {
-    const parts = dynamicParts(camP, { phi: st.phi, th: st.th });
+    const parts = dynamicParts(camP, { phi: st.phi, th: st.th, fine: D.v3 });
     for (const name of ["pinion", "stage", "second", "out", "arm", "pin", "leaf"]) writeDs(name, partDs(parts[name]));
     lastPhi = st.phi;
   }
   if (st.th !== lastTh) {
-    writeDs("lever", partDs(leverPart(camP, st.th)));
+    writeDs("lever", partDs(leverPart(camP, st.th, D.v3)));
     lastTh = st.th;
   }
   if (doorEl) {
     const alpha = doorNow();
     if (Math.abs(alpha - lastDoor) > 1e-5) {
-      const part = doorPart(camP, alpha);
+      const part = doorPart(camP, alpha, { hooks: D.v3 });
       const ds = doorDsOf(part);
       for (let i = 0; i < ds.length; i++) if (doorPaths[i].getAttribute("d") !== ds[i]) doorPaths[i].setAttribute("d", ds[i]);
       part.dots.forEach(([x, y], i) => {
@@ -98,7 +98,7 @@ function writeDs(name, ds) {
 }
 
 const camView = () => {
-  let fit = { s: 1, tx: 0, ty: 0 };
+  let fit = D.base || { s: 1, tx: 0, ty: 0 };
   let cam = 0;
   STEPS.forEach((step, s) => {
     const t = clampTo(springs[s][step.order[0]].x, 0, 1.25);
@@ -153,8 +153,8 @@ function place() {
     order = next;
   }
   const view = camView();
-  engine.setAttribute("transform", view.cam === 0 ? "" : `translate(${view.ox.toFixed(2)} ${view.oy.toFixed(2)}) scale(${view.k.toFixed(4)})`);
-  if (view.cam === 0) engine.removeAttribute("transform");
+  if (view.cam === 0 && !D.base) engine.removeAttribute("transform");
+  else engine.setAttribute("transform", `translate(${view.ox.toFixed(2)} ${view.oy.toFixed(2)}) scale(${view.k.toFixed(4)})`);
   paintCalls(view);
 }
 
@@ -805,6 +805,127 @@ say(status());
 describe();
 labelApart();
 showInfo(null);
+// v3 zoom: a pinch on a touch screen, a trackpad pinch or Ctrl + wheel over the drawing zooms into it, up to ZOOM_MAX,
+// around the fingers or the pointer. The page itself does not zoom. When the gesture ends the drawing eases back to
+// its normal size. The card clips it, and a thin mask fades it out before the card's edge.
+const viewBox = stage.querySelector(".um-view");
+const ZOOM_MAX = 2.6;
+const zoom = { z: 1, x: 0, y: 0, frame: 0, wheel: 0, pinch: null, base: 1 };
+function applyZoom() {
+  const { z, x, y } = zoom;
+  svg.style.transform = z === 1 && !x && !y ? "" : `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) scale(${z.toFixed(4)})`;
+  stage.toggleAttribute("data-zoomed", z > 1.01);
+}
+function clampPan() {
+  const w = viewBox.clientWidth;
+  const h = viewBox.clientHeight;
+  zoom.x = clampTo(zoom.x, w - w * zoom.z, 0);
+  zoom.y = clampTo(zoom.y, h - h * zoom.z, 0);
+}
+const localOf = (clientX, clientY) => {
+  const r = viewBox.getBoundingClientRect();
+  return [clientX - r.left, clientY - r.top];
+};
+function zoomAt([px, py], z) {
+  const next = clampTo(z, 1, ZOOM_MAX);
+  zoom.x = px - ((px - zoom.x) * next) / zoom.z;
+  zoom.y = py - ((py - zoom.y) * next) / zoom.z;
+  zoom.z = next;
+  clampPan();
+  applyZoom();
+}
+function holdZoom() {
+  cancelAnimationFrame(zoom.frame);
+  zoom.frame = 0;
+}
+function releaseZoom() {
+  holdZoom();
+  if (still.matches) {
+    Object.assign(zoom, { z: 1, x: 0, y: 0 });
+    return applyZoom();
+  }
+  let last = performance.now();
+  const back = (time) => {
+    const f = 1 - Math.exp(-Math.min(0.05, (time - last) / 1000) / 0.09);
+    last = time;
+    zoom.z += (1 - zoom.z) * f;
+    zoom.x -= zoom.x * f;
+    zoom.y -= zoom.y * f;
+    const done = zoom.z - 1 < 0.002 && Math.abs(zoom.x) < 0.3 && Math.abs(zoom.y) < 0.3;
+    if (done) Object.assign(zoom, { z: 1, x: 0, y: 0 });
+    applyZoom();
+    zoom.frame = done ? 0 : requestAnimationFrame(back);
+  };
+  zoom.frame = requestAnimationFrame(back);
+}
+if (viewBox) {
+  // trackpad pinches arrive as wheel events with ctrlKey set (Chrome, Edge, Firefox); a mouse needs Ctrl held
+  viewBox.addEventListener(
+    "wheel",
+    (event) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      holdZoom();
+      const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
+      zoomAt(localOf(event.clientX, event.clientY), zoom.z * Math.exp(-delta * 0.01));
+      clearTimeout(zoom.wheel);
+      zoom.wheel = setTimeout(releaseZoom, 180);
+    },
+    { passive: false },
+  );
+  // Safari's trackpad pinch; on iOS the touch handlers below do the work and these only stop the page zooming
+  viewBox.addEventListener("gesturestart", (event) => {
+    event.preventDefault();
+    if (zoom.pinch) return;
+    holdZoom();
+    zoom.base = zoom.z;
+  });
+  viewBox.addEventListener("gesturechange", (event) => {
+    event.preventDefault();
+    if (!zoom.pinch) zoomAt(localOf(event.clientX, event.clientY), zoom.base * event.scale);
+  });
+  viewBox.addEventListener("gestureend", (event) => {
+    event.preventDefault();
+    if (!zoom.pinch) releaseZoom();
+  });
+  const pinchOf = (touches) => {
+    const [a, b] = [touches[0], touches[1]];
+    return { at: localOf((a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2), d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) };
+  };
+  viewBox.addEventListener(
+    "touchstart",
+    (event) => {
+      if (event.touches.length !== 2) return;
+      event.preventDefault();
+      holdZoom();
+      const { at, d } = pinchOf(event.touches);
+      zoom.pinch = { d, z: zoom.z, cx: (at[0] - zoom.x) / zoom.z, cy: (at[1] - zoom.y) / zoom.z };
+    },
+    { passive: false },
+  );
+  viewBox.addEventListener(
+    "touchmove",
+    (event) => {
+      if (!zoom.pinch || event.touches.length < 2) return;
+      event.preventDefault();
+      const { at, d } = pinchOf(event.touches);
+      zoom.z = clampTo((zoom.pinch.z * d) / Math.max(1, zoom.pinch.d), 1, ZOOM_MAX);
+      zoom.x = at[0] - zoom.pinch.cx * zoom.z;
+      zoom.y = at[1] - zoom.pinch.cy * zoom.z;
+      clampPan();
+      applyZoom();
+    },
+    { passive: false },
+  );
+  const endPinch = (event) => {
+    if (!zoom.pinch || event.touches.length >= 2) return;
+    zoom.pinch = null;
+    releaseZoom();
+  };
+  viewBox.addEventListener("touchend", endPinch);
+  viewBox.addEventListener("touchcancel", endPinch);
+}
+
 // probe(world, piece, rides): the callout ids of the part painted on top at a world point (glass skipped), for checks.
 const probe = (world, id, rides = null) => {
   const [x, y] = screenOf(world, id, camView(), rides);
@@ -813,4 +934,4 @@ const probe = (world, id, rides = null) => {
   const top = hits.find((it) => !it.querySelector(".um-glass"));
   return top ? top.dataset.c || `-${top.dataset.i}` : "";
 };
-window.__um = { st, piece, springs, flip, setApart, setStep, nextStep, select, idle, assembled, setAuto, setCalls, calls, probe };
+window.__um = { st, piece, springs, flip, setApart, setStep, nextStep, select, idle, assembled, setAuto, setCalls, calls, probe, zoom };

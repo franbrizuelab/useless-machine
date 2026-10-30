@@ -184,7 +184,7 @@ if (V2) {
 const pageName = (ver) => `useless-machine${ver > 1 ? `-v${ver}` : ""}${THEME === "light" ? "-light" : ""}.html`;
 
 const STATE0 = M.fresh();
-const parts0 = dynamicParts(P, STATE0);
+const parts0 = dynamicParts(P, { ...STATE0, fine: V3 });
 
 function mechDynamicItems(gearSpec) {
   for (const [name, c, layer, r] of gearSpec) {
@@ -281,7 +281,7 @@ function lidFrontV2() {
     `<g class="um-glassline">${L(k.onTop(inset, top, P, true), { tone: "faint" })}${D([[-58, 37.3], [58, 37.3], [58, Yn + 2.4]].map(([x, y]) => at([x, y, top])), { size: 0.5 })}</g>`;
   put("lid", [0, 36.5, Z_LID + 1.5], svg, { bias: 0.1, shapes: [A.extruded(ring, Z_LID, LID_H, { name: "lid.front" })], name: "lid.front" });
 
-  put("lid", [(DOOR.X0 + DOOR.X1) / 2, 26, Z_LID + 1.5], `<g data-dyn="door">${doorSvgOf(doorPart(P, 0))}</g>`, {
+  put("lid", [(DOOR.X0 + DOOR.X1) / 2, 26, Z_LID + 1.5], `<g data-dyn="door">${doorSvgOf(doorPart(P, 0, { hooks: V3 }))}</g>`, {
     dyn: "door",
     bias: 0.2,
     shapes: [A.extruded(DOOR_RING, DOOR.z0, DOOR.z1 - DOOR.z0, { name: "lid.door" }), A.extruded(DOOR_LEAF, DOOR.z1, HINGE.doorLeaf.h, { name: "lid.doorleaf" })],
@@ -565,6 +565,9 @@ for (let s = 1; s < STAGES.length; s++) {
 }
 if (V2 && !stageCache && !process.argv.includes("--noseatle")) writeFileSync(STAGE_KEYS, JSON.stringify(STAGE_R.map((Rs, s) => (s ? Rs.items.map((one) => one.key) : []))));
 
+// v3 draws the machine 20% larger: the assembled view is scaled 1.2 about the card's centre, and each take-apart stage
+// gets as close to 1.2 as the card allows, clear of the badge columns.
+const FIT = V3 ? { inner: [96, 44, W - 96, H - 50], cap: 1.2 } : { inner: [140, 70, W - 140, H - 70], cap: 1 };
 function fitOf(count) {
   const pts = [];
   for (const item of R.items) {
@@ -578,8 +581,8 @@ function fitOf(count) {
   const xs = pts.map((p) => p[0]);
   const ys = pts.map((p) => p[1]);
   const box = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
-  const inner = [140, 70, W - 140, H - 70];
-  const s = Math.min((inner[2] - inner[0]) / (box[2] - box[0]), (inner[3] - inner[1]) / (box[3] - box[1]), 1);
+  const { inner, cap } = FIT;
+  const s = Math.min((inner[2] - inner[0]) / (box[2] - box[0]), (inner[3] - inner[1]) / (box[3] - box[1]), cap);
   const c = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2];
   return { s, tx: W / 2 - ((W / 2) * (1 - s) + s * c[0]), ty: H / 2 - ((H / 2) * (1 - s) + s * c[1]) };
 }
@@ -705,6 +708,7 @@ const DATA = {
   calls: CALLS.map(({ id, name, say, piece, anchor, dyn, side, dy, rides, spine, later }) => ({ id, name, say, piece, anchor, dyn, side, dy, rides, spine, later })),
   v2: V2,
   v3: V3,
+  base: V3 ? fitOf(0) : null,
   door: V2 ? DOOR_TABLE : null,
   stages: V2 ? STAGES.map((stage, s) => ({ id: stage.id, name: stage.name, order: stage.order, rides: stage.rides, fit: fitOf(s + 1) })) : null,
 };
@@ -756,7 +760,7 @@ const stageLabel = V3
   : V2
     ? "Useless machine. Space or Enter flips the switch, E takes it apart one axis at a time, the arrow keys step through the parts, Escape clears."
     : "Useless machine. Space or Enter flips the switch, E takes it apart, the arrow keys step through the parts, Escape clears.";
-let plate = k.plateHtml({ fig: "Fig 1", title: "Useless machine", hint: V3 ? "" : "Click the switch", readout: V3 ? "" : "ready", keys: [], caption: "", body: `<div class="iso-stage um-stage" tabindex="0" role="group" aria-label="${stageLabel}">${svg}</div>${corners}` });
+let plate = k.plateHtml({ fig: "Fig 1", title: "Useless machine", hint: V3 ? "" : "Click the switch", readout: V3 ? "" : "ready", keys: [], caption: "", body: `<div class="iso-stage um-stage" tabindex="0" role="group" aria-label="${stageLabel}">${V3 ? `<div class="um-view">${svg}</div>` : svg}</div>${corners}` });
 if (V3) plate = plate.replace(/<span class="iso-plate-corner" data-corner="readout"[^>]*><\/span>/, "");
 const body = `<div class="um${V3 ? " um3" : ""}">${plate.replace("</div></figure>", `</div>${controls}</figure>`)}<div class="um-below"><div class="um-circuit">${circuit}</div><ol class="um-parts">${parts}</ol></div><p class="iso-caption um-caption">${caption}</p></div>`;
 const SITE = "https://franbrizuelab.github.io/useless-machine/";

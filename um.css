@@ -137,3 +137,8 @@
 .um3 .um-say { font-size: 12.65px; }
 .um3 .um-caption { margin-top: 18px; font-size: 15.4px; }
 @media (max-width: 760px) { .um3 .um-below { grid-template-columns: 1fr; } .um3 .um-info { height: 180px; } }
+.iso[data-theme="light"] .um3 { --anatomy-weight: .62px; }
+.um-view { position: relative; overflow: hidden; border-radius: inherit; -webkit-mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent), linear-gradient(180deg, transparent, #000 18px, #000 calc(100% - 18px), transparent); -webkit-mask-composite: source-in; mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent), linear-gradient(180deg, transparent, #000 18px, #000 calc(100% - 18px), transparent); mask-composite: intersect; }
+.um-view .iso-svg { transform-origin: 0 0; }
+.um-stage .um-over { transition: opacity .2s; }
+.um-stage[data-zoomed] .um-over { opacity: 0; pointer-events: none; }
