@@ -1,0 +1,3 @@
+[["wait", 300], ["until", "window.__um && window.__um.idle()", 8000], ["key", "e"], ["wait", 1800],
+ ["eval", "JSON.stringify(Object.fromEntries(Object.entries(window.__um.piece).map(([k, v]) => [k, [+v.x.toFixed(4), +v.v.toFixed(4), v.target, !!v.pending]])))"],
+ ["eval", "document.querySelector('[data-readout]').textContent"], ["wait", 1500], ["eval", "document.querySelector('[data-readout]').textContent"]]

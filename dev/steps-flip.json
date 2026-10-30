@@ -1,0 +1,1 @@
+[["wait", 300], ["until", "window.__um && window.__um.idle()", 8000], ["eval", "window.__um.flip(); 1"], ["slow", 0.5], ["sheet", "shots/flip-sheet.png", 120, 24, ".um-stage", 1.5, [300, 120, 360, 260], 6], ["slow", 1]]

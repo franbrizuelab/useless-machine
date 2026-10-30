@@ -1,0 +1,4 @@
+[["wait", 400], ["until", "window.__um && window.__um.idle()", 8000], ["shot", "shots/w-home.png", ".um-stage", 1.4],
+ ["shot", "shots/w-board.png", ".um-stage", 4, [470, 330, 260, 170]],
+ ["shot", "shots/w-toggle.png", ".um-stage", 4, [380, 200, 240, 170]],
+ ["eval", "window.__um.setStep(1); 1"], ["wait", 2400], ["shot", "shots/w-apart.png", ".um-stage", 1.4]]

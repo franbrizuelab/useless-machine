@@ -1,0 +1,1 @@
+[["wait", 600], ["until", "window.__um && window.__um.idle()", 8000], ["key", "e"], ["sheet", "shots/explode-sheet.png", 130, 12, ".um-stage", 0.55, null, 4], ["wait", 1800], ["shot", "shots/apart2.png", ".um-stage", 1.6]]

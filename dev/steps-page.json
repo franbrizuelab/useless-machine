@@ -1,0 +1,1 @@
+[["wait", 500], ["until", "window.__um && window.__um.idle()", 8000], ["eval", "window.__um.flip(); 1"], ["wait", 640], ["shot", "shots/page.png", ".um", 1]]

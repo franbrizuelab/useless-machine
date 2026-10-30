@@ -1,0 +1,11 @@
+[["wait", 400], ["until", "window.__um && window.__um.idle()", 8000], ["shot", "shots/v2-page.png", ".um", 1],
+ ["shot", "shots/v2-assembled.png", ".um-stage", 1.4],
+ ["eval", "window.__um.flip(); 1"], ["wait", 640], ["shot", "shots/v2-dooropen.png", ".um-stage", 1.4],
+ ["shot", "shots/v2-z-dooropen.png", ".um-stage", 3.4, [260, 90, 330, 230]],
+ ["until", "window.__um.idle()", 9000],
+ ["eval", "window.__um.nextStep(); 1"], ["wait", 2600], ["shot", "shots/v2-step1.png", ".um-stage", 1.4],
+ ["eval", "window.__um.nextStep(); 1"], ["wait", 2600], ["shot", "shots/v2-step2.png", ".um-stage", 1.4],
+ ["eval", "window.__um.nextStep(); 1"], ["wait", 2600], ["shot", "shots/v2-step3.png", ".um-stage", 1.4],
+ ["eval", "document.querySelector('[data-apart]').textContent + ' | ' + document.querySelector('[data-readout]').textContent"],
+ ["eval", "window.__um.nextStep(); 1"], ["wait", 7000], ["eval", "document.querySelector('[data-apart]').textContent + ' | ' + document.querySelector('[data-readout]').textContent"],
+ ["eval", "window.__um.select('15'); 1"], ["wait", 200], ["shot", "shots/v2-sel15.png", ".um-stage", 1.4], ["eval", "window.__um.select(null); 1"]]

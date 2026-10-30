@@ -1,0 +1,1 @@
+[["wait", 500], ["until", "window.__um && window.__um.idle()", 8000], ["shot", "shots/phone.png", ".um", 1]]

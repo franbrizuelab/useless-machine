@@ -1,0 +1,4 @@
+[["wait", 500], ["until", "window.__um && window.__um.idle()", 8000], ["shot", "shots/cc2-idle.png", ".um-circuit", 2.4],
+ ["eval", "window.__um.flip(); 1"], ["wait", 300], ["shot", "shots/cc2-out.png", ".um-circuit", 2.4],
+ ["until", "window.__um.st.volts < -3", 6000], ["wait", 100], ["shot", "shots/cc2-back.png", ".um-circuit", 2.4],
+ ["eval", "window.__um.flip(); 1"], ["slow", 0.04], ["wait", 0], ["sheet", "shots/cc2-sheet.png", 160, 12, ".um-circuit", 1.6, null, 4], ["slow", 1]]

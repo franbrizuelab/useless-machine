@@ -2,19 +2,19 @@ import { iso, pathOf, cameraOf } from "./kit-link.mjs";
 
 const LIGHT_UP = 1.2;
 const BANDS = [0, 0.2, 0.42, 0.62];
-const bandIn = (score) => {
+export const bandIn = (score) => {
   let tone = 0;
   while (tone < BANDS.length && score >= BANDS[tone]) tone++;
   return tone;
 };
-const toward = (P) => {
+export const toward = (P) => {
   const { sinA, cosA, sinE, cosE } = cameraOf(P);
   const light = [-sinA, cosA, LIGHT_UP];
   const norm = Math.hypot(light[0], light[1], light[2]);
   return { V: [cosA * cosE, sinA * cosE, sinE], L: [light[0] / norm, light[1] / norm, light[2] / norm] };
 };
-const dotv = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const orient = (points) => {
+export const dotv = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+export const orient = (points) => {
   let area = 0;
   for (let i = 0; i < points.length; i++) {
     const [x0, y0] = points[i];

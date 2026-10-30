@@ -57,3 +57,17 @@
 .um-caption { margin-top: 16px; max-width: 78ch; }
 @media (max-width: 760px) { .um-below { grid-template-columns: 1fr; } .um-parts { columns: 1; } }
 @media (prefers-reduced-motion: reduce) { .um-stage * { transition: none !important; } }
+.um-ver { display: inline-flex; border: 1px solid var(--um-ink2); }
+.um-ver a { display: inline-grid; place-items: center; height: 30px; padding: 0 12px; color: var(--um-ink1); font: 12px var(--anatomy-mono); letter-spacing: .04em; text-decoration: none; }
+.um-ver a + a { border-left: 1px solid var(--um-ink3); }
+.um-ver a:hover { background: #fff; color: var(--um-ink0); }
+.um-ver a[aria-current] { background: var(--um-ink0); color: var(--anatomy-paper); }
+.um-ver a:focus-visible { outline: 1px solid var(--um-ink0); outline-offset: 2px; }
+.cc2 .cc-w path { stroke: var(--um-ink2); stroke-width: .9px; }
+.cc2 .cc-i path { stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.cc2 .cc-glow { stroke: var(--um-ink0) !important; stroke-width: 1.5px !important; }
+.cc2 .cc-flow { stroke: #000 !important; stroke-width: 3.2px !important; stroke-dasharray: 0.01 7; }
+.cc2 .cc-blade path { stroke: var(--um-ink0); stroke-width: 1.5px; }
+.cc2 .cc-gang { stroke: var(--um-ink2); stroke-width: .8px; stroke-dasharray: 2 2.4; }
+.cc2 .cc-node circle { fill: var(--um-ink0); stroke: none; }
+.cc2 .cc-dir { fill: var(--um-ink1); font-weight: 400; }

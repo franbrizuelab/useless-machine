@@ -1,0 +1,4 @@
+[["wait", 400], ["until", "window.__um && window.__um.idle()", 8000], ["shot", "shots/v2-home.png", ".um-stage", 1.4],
+ ["eval", "window.__um.flip(); 1"], ["slow", 0.2],
+ ["sheet", "shots/v2-door-sheet.png", 90, 16, ".um-stage", 2.2, [300, 140, 400, 280], 4], ["slow", 1],
+ ["until", "window.__um.idle()", 9000], ["eval", "window.__um.flip(); 1"], ["wait", 620], ["shot", "shots/v2-out.png", ".um-stage", 1.4]]

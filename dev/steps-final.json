@@ -1,0 +1,1 @@
+[["wait", 400], ["until", "window.__um && window.__um.idle()", 8000], ["shot", "shots/final-assembled.png", ".um-stage", 1.4], ["eval", "window.__um.setApart(true); 1"], ["wait", 2400], ["shot", "shots/final-apart.png", ".um-stage", 1.4]]

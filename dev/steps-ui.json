@@ -1,0 +1,13 @@
+[["wait", 300], ["until", "window.__um && window.__um.idle()", 8000],
+ ["eval", "(() => { const h = document.querySelector('.um-hit'); const r = h.getBoundingClientRect(); return JSON.stringify([Math.round(r.x + r.width/2), Math.round(r.y + r.height/2), Math.round(r.width)]); })()"],
+ ["eval", "document.querySelector('.um-part[data-c=\"9\"]').dispatchEvent(new PointerEvent('pointerenter')); 1"],
+ ["wait", 200], ["shot", "shots/select9.png", ".um-stage", 1],
+ ["eval", "document.querySelector('.um-part[data-c=\"9\"]').dispatchEvent(new PointerEvent('pointerleave')); 1"],
+ ["eval", "(() => { const h = document.querySelector('.um-hit'); const r = h.getBoundingClientRect(); h.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true, clientX: r.x + r.width/2, clientY: r.y + r.height/2})); return window.__um.st.th; })()"],
+ ["wait", 500], ["eval", "JSON.stringify({th: window.__um.st.th, phi: window.__um.st.phi})"],
+ ["until", "window.__um.idle()", 8000], ["eval", "document.querySelector('[data-readout]').textContent"],
+ ["key", "e"], ["wait", 1800], ["eval", "document.querySelector('[data-readout]').textContent"],
+ ["key", " "], ["wait", 400], ["eval", "document.querySelector('[data-readout]').textContent + ' | ' + document.querySelector('[data-note]').textContent"],
+ ["until", "window.__um.idle() && window.__um.assembled()", 12000], ["eval", "document.querySelector('[data-readout]').textContent"],
+ ["key", "ArrowRight"], ["key", "ArrowRight"], ["wait", 200], ["eval", "document.querySelector('.um-stage').getAttribute('aria-description')"],
+ ["key", "Escape"], ["wait", 300], ["eval", "document.querySelector('.um-stage').hasAttribute('data-focus')"]]

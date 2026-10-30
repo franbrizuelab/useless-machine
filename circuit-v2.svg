@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="cc cc2" viewBox="0 0 340 200" role="img" aria-label="Circuit: a three-cell battery, a DPDT toggle switch whose two ganged poles reverse the DC motor, and a limit switch in the reverse path only. Moving dots show the current.">
+<text class="cc-t cc-h" x="2" y="12">CIRCUIT</text>
+<text class="cc-t cc-v" x="338" y="12" text-anchor="end"><tspan data-volts>0.0 V</tspan><tspan class="cc-dir" data-dir> · stopped</tspan></text>
+<g class="cc-w">
+<path d="M40 28H292V88"/>
+<path d="M40 176H262V44H218V78"/>
+<path d="M112 28V78"/><path d="M112 176V122"/>
+<path d="M140 100H153"/><path d="M177 100H190"/>
+<path d="M292 112V158H268A6 6 0 0 0 256 158H218V122"/>
+<path d="M40 28V72M40 128V176"/>
+</g>
+<g class="cc-i">
+<path class="cc-glow" data-loop="on" d="M40 28H112V78L140 100H153A12 12 0 0 1 177 100H190L218 78V44H262V176H40"/>
+<path class="cc-glow" data-loop="off" d="M40 28H292V88L292 112V158H268A6 6 0 0 0 256 158H218V122L190 100H177A12 12 0 0 0 153 100H140L112 122V176H40"/>
+<path class="cc-flow" data-loop="on" d="M40 28H112V78L140 100H153A12 12 0 0 1 177 100H190L218 78V44H262V176H40"/>
+<path class="cc-flow" data-loop="off" d="M40 28H292V88L292 112V158H268A6 6 0 0 0 256 158H218V122L190 100H177A12 12 0 0 0 153 100H140L112 122V176H40"/>
+</g>
+<g class="cc-cell"><path d="M29 72H51"/><path d="M34 80H46"/><path d="M29 96H51"/><path d="M34 104H46"/><path d="M29 120H51"/><path d="M34 128H46"/></g>
+<rect class="cc-box" x="98" y="62" width="134" height="76" rx="3"/>
+<path class="cc-gang" data-gang d="M116 81H214"/>
+<g class="cc-blade"><path data-blade="a" d="M140 100L112 78"/><path data-blade="b" d="M190 100L218 78"/><path data-blade="ls" d="M292 112L292 88"/></g>
+<g data-motor><circle class="cc-motor" cx="165" cy="100" r="12"/><text class="cc-t cc-m" x="165" y="100" dy=".35em" text-anchor="middle">M</text></g>
+<g class="cc-dot"><circle cx="112" cy="78" r="2.2"/><circle cx="112" cy="122" r="2.2"/><circle cx="218" cy="78" r="2.2"/><circle cx="218" cy="122" r="2.2"/><circle cx="140" cy="100" r="2.2"/><circle cx="190" cy="100" r="2.2"/><circle cx="292" cy="88" r="2"/><circle cx="292" cy="112" r="2"/><circle cx="40" cy="28" r="2"/><circle cx="40" cy="176" r="2"/></g>
+<g class="cc-node"><circle cx="112" cy="28" r="1.6"/><circle cx="112" cy="176" r="1.6"/></g>
+<text class="cc-t" x="54" y="97">3 × AA</text><text class="cc-t" x="54" y="109">4.5 V</text>
+<text class="cc-t" x="30" y="24" text-anchor="middle">+</text><text class="cc-t" x="30" y="188" text-anchor="middle">−</text>
+<text class="cc-t" x="125" y="150">DPDT toggle</text>
+<text class="cc-t" x="105" y="81" text-anchor="end">on</text><text class="cc-t" x="105" y="125" text-anchor="end">off</text>
+<text class="cc-t" x="300" y="97">limit</text><text class="cc-t" x="300" y="108">switch</text>
+</svg>

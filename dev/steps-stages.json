@@ -1,0 +1,6 @@
+[["wait", 400], ["until", "window.__um && window.__um.idle()", 8000],
+ ["eval", "window.__um.nextStep(); 1"], ["wait", 2200], ["shot", "shots/v2-step1.png", ".um", 1],
+ ["eval", "window.__um.nextStep(); 1"], ["wait", 2200], ["shot", "shots/v2-step2.png", ".um-stage", 1.4],
+ ["eval", "window.__um.nextStep(); 1"], ["wait", 2200], ["shot", "shots/v2-step3.png", ".um-stage", 1.4],
+ ["eval", "document.querySelector('[data-readout]').textContent + ' | ' + document.querySelector('[data-apart]').textContent"],
+ ["eval", "window.__um.nextStep(); 1"], ["wait", 5000], ["eval", "document.querySelector('[data-readout]').textContent + ' | ' + document.querySelector('[data-apart]').textContent"]]

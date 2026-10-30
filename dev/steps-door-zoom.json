@@ -1,0 +1,2 @@
+[["wait", 400], ["until", "window.__um && window.__um.idle()", 8000], ["shot", "shots/v2-z-home.png", ".um-stage", 3.2, [200, 120, 360, 220]],
+ ["eval", "window.__um.flip(); 1"], ["wait", 640], ["shot", "shots/v2-z-out.png", ".um-stage", 3.2, [200, 100, 360, 220]]]

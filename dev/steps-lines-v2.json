@@ -1,0 +1,6 @@
+[["wait", 300], ["until", "window.__um && window.__um.idle()", 8000],
+ ["eval", "window.__um.setStep(1); 1"], ["wait", 2600], ["lines", "shots/v2-lines-z.png"],
+ ["eval", "window.__um.setStep(2); 1"], ["wait", 2600], ["lines", "shots/v2-lines-y.png"],
+ ["eval", "window.__um.setStep(3); 1"], ["wait", 2600], ["lines", "shots/v2-lines-x.png"],
+ ["eval", "window.__um.setStep(0); 1"], ["wait", 7000],
+ ["eval", "window.__um.flip(); 1"], ["wait", 520], ["lines", "shots/v2-lines-mid.png"]]

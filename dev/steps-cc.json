@@ -1,0 +1,1 @@
+[["wait", 500], ["until", "window.__um && window.__um.idle()", 8000], ["shot", "shots/cc-idle.png", ".um-circuit", 2.4], ["eval", "window.__um.flip(); 1"], ["wait", 500], ["shot", "shots/cc-out.png", ".um-circuit", 2.4], ["until", "window.__um.st.volts < -3", 6000], ["shot", "shots/cc-back.png", ".um-circuit", 2.4]]

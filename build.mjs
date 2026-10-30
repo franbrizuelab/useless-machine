@@ -9,12 +9,16 @@ const load = (file) => import(pathToFileURL(join(SKILL, file)).href);
 const k = await load("kit/iso-kit.mjs");
 const G = await load("kit/lathe.mjs");
 const A = await load("kit/audit.mjs");
+const { tubePieces, tubeSvg } = await load("kit/tube.mjs");
 const { kitScript } = await load("scripts/inline-kit.mjs");
 const { M } = await import("./model.mjs");
 const { plateOf, plateParts, partSvg, partDs, onPlate, ringOnPlate, roundPoly, circlePoly, turnPoint, rectPoly } = await import("./plate.mjs");
 const { dynamicParts } = await import("./draw.mjs");
+const { DOOR, DOOR_RING, HINGE, roundEach, diagX } = await import("./door.mjs");
+const { doorPart, doorSvgOf, DOOR_LEAF } = await import("./draw2.mjs");
 
 const THEME = process.argv.includes("--dark") ? "dark" : "light";
+const V2 = process.argv.includes("--v2");
 
 const W = 980;
 const H = 640;
@@ -49,9 +53,9 @@ const L = (d, style) => k.lineSvg(d, style);
 const D = (points, style) => k.dotsSvg(points, style);
 const D3 = (points3, style) => D(points3.map(at), style);
 
-function put(piece, ref, svg, { bias = 0, shapes = [], name, dyn, group } = {}) {
-  shapes.forEach((shape) => !R.solids.includes(shape) && R.solid(shape));
-  R.put({ piece, ride: piece, at: ref, bias, svg, move: PIECES[piece].move, shapes, name: name ?? R.nameFor(`${piece}.item`), dyn, group });
+function put(piece, ref, svg, { bias = 0, shapes = [], name, dyn, group, route, chunk } = {}) {
+  if (route === undefined) shapes.forEach((shape) => !R.solids.includes(shape) && R.solid(shape));
+  R.put({ piece, ride: piece, at: ref, bias, svg, move: PIECES[piece].move, shapes, name: name ?? R.nameFor(`${piece}.item`), dyn, group, route, chunk });
 }
 const FRAME_Y = (x, z) => G.frameAlong([x, 0, z], [0, 1, 0]);
 const FRAME_X = (y, z) => G.frameAlong([0, y, z], [1, 0, 0]);
@@ -119,7 +123,9 @@ function batteryItems() {
   put("battery", [-6.7, -15, 13], S(k.slabOf(clip, trayTop, 9, P, 2, 0.3), { tone: "mid" }) + D3([[-6.1, -29.6, trayTop + 9], [-6.1, 0, trayTop + 9]], { size: 0.5 }), { bias: 0.3, shapes: [slabShape(clip, trayTop, 9, "battery.clip")], name: "battery.clip" });
 }
 
-const PLATE_POLY = roundPoly([[-10, 6], [58, 6], [58, 50], [46, 58], [22, 58], [16, 49], [16, 44], [-10, 44]], 3.5, 4);
+const PLATE_POLY = V2
+  ? roundPoly([[-10, 6], [32.4, 6], [32.4, 9.8], [37.2, 9.8], [37.2, 6], [58, 6], [58, 50], [46, 58], [22, 58], [16, 49], [16, 44], [-10, 44]], 3.5, 4)
+  : roundPoly([[-10, 6], [58, 6], [58, 50], [46, 58], [22, 58], [16, 49], [16, 44], [-10, 44]], 3.5, 4);
 const FOOT = { x: -39, y: 12, w: 97, d: 20, r: 2 };
 const BLOCK = { x: -39, y: 20, w: 24, d: 11, r: 1.5 };
 const SWB = { x: -37, y: M.Y.body[0], w: 20, d: M.Y.body[1] - M.Y.body[0], r: 0.8 };
@@ -161,12 +167,27 @@ function mechBackItems() {
   return gearSpec;
 }
 
+const DOOR_TABLE_FILE = join(HERE, "door-table.json");
+let DOOR_TABLE = null;
+if (V2) {
+  const { doorTable } = await import("./door-table.mjs");
+  const stamp = JSON.stringify([DOOR, M.ARM, M.PIN.r, M.Y.arm, M.Y.pin, M.S]);
+  const cached = existsSync(DOOR_TABLE_FILE) ? JSON.parse(readFileSync(DOOR_TABLE_FILE, "utf8")) : null;
+  if (cached && cached.stamp === stamp) DOOR_TABLE = cached.table;
+  else {
+    DOOR_TABLE = doorTable();
+    writeFileSync(DOOR_TABLE_FILE, JSON.stringify({ stamp, table: DOOR_TABLE }));
+  }
+}
+const pageName = (v2) => `useless-machine${v2 ? "-v2" : ""}${THEME === "light" ? "-light" : ""}.html`;
+
 const STATE0 = M.fresh();
 const parts0 = dynamicParts(P, STATE0);
 
 function mechDynamicItems(gearSpec) {
   for (const [name, c, layer, r] of gearSpec) {
-    put("mech", [c[0], (layer[0] + layer[1]) / 2, c[1]], `<g data-dyn="${name}">${partSvg(parts0[name])}</g>`, { dyn: name, shapes: [A.disc(FRAME_Y(c[0], c[1]), layer[0], layer[1], r, { name: `mech.gear.${name}` })], name: `mech.gear.${name}` });
+    const gearShape = A.disc(FRAME_Y(c[0], c[1]), layer[0], layer[1], r, { name: `mech.gear.${name}` });
+    put("mech", [c[0], (layer[0] + layer[1]) / 2, c[1]], `<g data-dyn="${name}">${partSvg(parts0[name])}</g>`, { dyn: name, shapes: [gearShape], name: `mech.gear.${name}` });
   }
   const leafAt = [M.SWITCH.hingeX + 8, 25.5, M.SWITCH.hingeZ + 1];
   put("mech", leafAt, `<g data-dyn="leaf">${partSvg(parts0.leaf)}</g>`, { dyn: "leaf", bias: 0.4, shapes: [A.prism(XZ, worldRing(rectPoly(0, 0, M.SWITCH.leaf, 0.9, 0.3, 2), M.SWITCH.hingeX, M.SWITCH.hingeZ, 0), M.Y.leaf[0], M.Y.leaf[1], { name: "mech.leaf" })], name: "mech.leaf" });
@@ -189,15 +210,18 @@ function lidBackItems() {
   lugs.forEach(([x, y], index) => put("lid", [x, y, 47], S(k.cylinder(x, y, 0.6, 45, 4, P, 8), { tone: "mid", crease: "none" }), { bias: -0.2, shapes: [A.cylinder(x, y, 0.6, 45, 4, { name: `lid.lug${index}` })], name: `lid.lug${index}` }));
   put("lid", [TOG.x, TOG.y, 54], bodySvg, { shapes: [slabShape(body, 49, 11, "lid.toggle")], name: "lid.toggle" });
 
-  const back = roundPoly([[BOX.x, BOX.y], [BOX.x + BOX.w, BOX.y], [BOX.x + BOX.w, SLIT[0]], [-12, SLIT[0]], [-12, 13], [BOX.x, 13]], 2.4, 3);
-  const ring = back;
-  const lidSvg = `<g class="um-glass">${S(k.extrude(ring, Z_LID, LID_H, P, { convex: false, bevel: 0.6 }), { tone: "hi" })}</g>` + `<g class="um-glassline">${L(k.onTop(ring.map(([x, y]) => [x, y]), Z_LID + LID_H, P, true), { tone: "faint" })}</g>`;
-  const lidBackSvg = lidSvg.replace(
-    L(k.onTop(ring, Z_LID + LID_H, P, true), { tone: "faint" }),
-    L(k.onTop(roundPoly([[BOX.x + 5, BOX.y + 5], [BOX.x + BOX.w - 5, BOX.y + 5], [BOX.x + BOX.w - 5, SLIT[0] - 4], [-8, SLIT[0] - 4], [-8, 17], [BOX.x + 5, 17]], 1.5, 3), Z_LID + LID_H, P, true), { tone: "faint" }),
-  );
-  const screws = [[BOX.x + 7, BOX.y + 7], [BOX.x + BOX.w - 7, BOX.y + 7], [BOX.x + BOX.w - 7, SLIT[0] - 7], [BOX.x + 7, 19]];
-  put("lid", [0, -10, Z_LID + 1.5], lidBackSvg + `<g class="um-glassline">${D(screws.map(([x, y]) => at([x, y, Z_LID + LID_H])), { size: 0.5 })}</g>`, { bias: 0.1, shapes: [A.extruded(ring, Z_LID, LID_H, { name: "lid.back" })], name: "lid.back" });
+  if (V2) lidPlateV2();
+  else {
+    const back = roundPoly([[BOX.x, BOX.y], [BOX.x + BOX.w, BOX.y], [BOX.x + BOX.w, SLIT[0]], [-12, SLIT[0]], [-12, 13], [BOX.x, 13]], 2.4, 3);
+    const ring = back;
+    const lidSvg = `<g class="um-glass">${S(k.extrude(ring, Z_LID, LID_H, P, { convex: false, bevel: 0.6 }), { tone: "hi" })}</g>` + `<g class="um-glassline">${L(k.onTop(ring.map(([x, y]) => [x, y]), Z_LID + LID_H, P, true), { tone: "faint" })}</g>`;
+    const lidBackSvg = lidSvg.replace(
+      L(k.onTop(ring, Z_LID + LID_H, P, true), { tone: "faint" }),
+      L(k.onTop(roundPoly([[BOX.x + 5, BOX.y + 5], [BOX.x + BOX.w - 5, BOX.y + 5], [BOX.x + BOX.w - 5, SLIT[0] - 4], [-8, SLIT[0] - 4], [-8, 17], [BOX.x + 5, 17]], 1.5, 3), Z_LID + LID_H, P, true), { tone: "faint" }),
+    );
+    const screws = [[BOX.x + 7, BOX.y + 7], [BOX.x + BOX.w - 7, BOX.y + 7], [BOX.x + BOX.w - 7, SLIT[0] - 7], [BOX.x + 7, 19]];
+    put("lid", [0, -10, Z_LID + 1.5], lidBackSvg + `<g class="um-glassline">${D(screws.map(([x, y]) => at([x, y, Z_LID + LID_H])), { size: 0.5 })}</g>`, { bias: 0.1, shapes: [A.extruded(ring, Z_LID, LID_H, { name: "lid.back" })], name: "lid.back" });
+  }
 
   const nut = hexRing(TOG.x, TOG.y, 4.9);
   const nutSvg =
@@ -216,7 +240,183 @@ function mechFrontItems() {
   put("mech", [pinAt[0], 19, pinAt[1]], `<g data-dyn="pin">${partSvg(parts0.pin)}</g>`, { dyn: "pin", bias: 0.5, shapes: [A.disc(FRAME_Y(pinAt[0], pinAt[1]), M.Y.pin[0], M.Y.pin[1], M.PIN.r, { name: "mech.pin" })], name: "mech.pin" });
 }
 
+function lidPlateV2() {
+  const { X0, X1, XKb, XKt, Yw, Yn, Yf } = DOOR;
+  const ring = roundEach([[BOX.x, BOX.y], [BOX.x + BOX.w, BOX.y], [BOX.x + BOX.w, Yn], [XKt, Yn], [XKb, Yw], [X0, Yw], [X0, Yf], [BOX.x, Yf]], [2.4, 2.4, 0, 1.0, 1.0, 1.6, 0, 0], 3);
+  const inset = roundEach([[BOX.x + 5, BOX.y + 5], [BOX.x + BOX.w - 5, BOX.y + 5], [BOX.x + BOX.w - 5, Yn - 2.4], [diagX(Yn - 2.4, -2.4), Yn - 2.4], [diagX(Yw - 2.4, -2.4), Yw - 2.4], [X0 - 3, Yw - 2.4], [X0 - 3, Yf - 4.4], [BOX.x + 5, Yf - 4.4]], Array(8).fill(1.5), 3);
+  const screws = [[BOX.x + 7, BOX.y + 7], [BOX.x + BOX.w - 7, BOX.y + 7], [BOX.x + BOX.w - 7, Yn - 6], [BOX.x + 7, Yf - 7]];
+  const svg =
+    `<g class="um-glass">${S(k.extrude(ring, Z_LID, LID_H, P, { convex: false, bevel: 0.6 }), { tone: "hi" })}</g>` +
+    `<g class="um-glassline">${L(k.onTop(inset, Z_LID + LID_H, P, true), { tone: "faint" })}${D(screws.map(([x, y]) => at([x, y, Z_LID + LID_H])), { size: 0.5 })}</g>`;
+  put("lid", [0, -10, Z_LID + 1.5], svg, { bias: 0.1, shapes: [A.extruded(ring, Z_LID, LID_H, { name: "lid.back" })], name: "lid.back" });
+  [
+    { x: X0 - 2, y: 13.6, w: 3, d: 6, r: 0.3 },
+    { x: X1 - 1, y: 23.6, w: 3, d: 6, r: 0.3 },
+  ].forEach((plan, index) => put("lid", [plan.x + 1.5, plan.y + 3, Z_LID - 0.75], S(k.slabOf(plan, Z_LID - 1.5, 1.5, P, 2, 0.2), { tone: "lo" }), { shapes: [slabShape(plan, Z_LID - 1.5, 1.5, `lid.ledge${index}`)], name: `lid.ledge${index}` }));
+}
+
+function lidFrontV2() {
+  const { X1, Yn, Yf, hy, hz, kr } = DOOR;
+  const top = Z_LID + LID_H;
+  const ring = roundEach([[BOX.x, Yf], [X1, Yf], [X1, Yn], [BOX.x + BOX.w, Yn], [BOX.x + BOX.w, BOX.y + BOX.d], [BOX.x, BOX.y + BOX.d]], [0, 1.0, 0, 0, 2.4, 2.4], 3);
+  const inset = roundEach([[BOX.x + 4, 36], [X1 + 4, 36], [X1 + 4, Yn + 3.6], [BOX.x + BOX.w - 4, Yn + 3.6], [BOX.x + BOX.w - 4, 38.6], [BOX.x + 4, 38.6]], [1, 1, 1, 1, 1, 1], 3);
+  const svg =
+    `<g class="um-glass">${S(k.extrude(ring, Z_LID, LID_H, P, { convex: false, bevel: 0.6 }), { tone: "hi" })}</g>` +
+    `<g class="um-glassline">${L(k.onTop(inset, top, P, true), { tone: "faint" })}${D([[-58, 37.3], [58, 37.3], [58, Yn + 2.4]].map(([x, y]) => at([x, y, top])), { size: 0.5 })}</g>`;
+  put("lid", [0, 36.5, Z_LID + 1.5], svg, { bias: 0.1, shapes: [A.extruded(ring, Z_LID, LID_H, { name: "lid.front" })], name: "lid.front" });
+
+  put("lid", [(DOOR.X0 + DOOR.X1) / 2, 26, Z_LID + 1.5], `<g data-dyn="door">${doorSvgOf(doorPart(P, 0))}</g>`, {
+    dyn: "door",
+    bias: 0.2,
+    shapes: [A.extruded(DOOR_RING, DOOR.z0, DOOR.z1 - DOOR.z0, { name: "lid.door" }), A.extruded(DOOR_LEAF, DOOR.z1, HINGE.doorLeaf.h, { name: "lid.doorleaf" })],
+    name: "lid.door",
+  });
+
+  HINGE.lidLeaves.forEach((leaf, index) => {
+    const plan = { x: leaf.x[0], y: leaf.y[0], w: leaf.x[1] - leaf.x[0], d: leaf.y[1] - leaf.y[0], r: 0.3 };
+    const sy = (leaf.y[0] + leaf.y[1]) / 2 + 0.2;
+    const sx = [leaf.x[0] + 2.4, leaf.x[1] - 2.4];
+    const leafSvg =
+      S(k.slabOf(plan, top, leaf.h, P, 2, 0.15), { tone: "mid" }) +
+      L(sx.map((x) => k.ring(x, sy, 0.75, top + leaf.h, P, 14)).join(""), { tone: "lo" }) +
+      D(sx.map((x) => at([x, sy, top + leaf.h])), { size: 0.5 });
+    put("lid", [(leaf.x[0] + leaf.x[1]) / 2, sy, top + 0.25], leafSvg, { shapes: [slabShape(plan, top, leaf.h, `lid.leaf${index}`)], name: `lid.leaf${index}` });
+  });
+
+  const HF = FRAME_X(hy, hz);
+  HINGE.knuckles.forEach(({ x: [x0, x1] }, index) => {
+    const seam = index === 1 ? "" : "";
+    put("lid", [(x0 + x1) / 2, hy, hz], S(G.disc(x0, x1, kr, HF, P), { tone: index === 1 ? "hi" : "mid", inner: seam }), { shapes: [A.disc(HF, x0, x1, kr, { name: `lid.knuckle${index}` })], name: `lid.knuckle${index}` });
+  });
+  const first = HINGE.knuckles[0].x[0];
+  const last = HINGE.knuckles[HINGE.knuckles.length - 1].x[1];
+  put("lid", [first - 0.25, hy, hz], S(G.disc(first - 0.5, first, kr * 0.72, HF, P), { tone: "mid" }), { shapes: [A.disc(HF, first - 0.5, first, kr * 0.72, { name: "lid.pinhead" })], name: "lid.pinhead" });
+  put("lid", [last + 0.2, hy, hz], S(G.disc(last, last + 0.35, HINGE.pinR + 0.1, HF, P), { tone: "mid" }), { shapes: [A.disc(HF, last, last + 0.35, HINGE.pinR + 0.1, { name: "lid.pintail" })], name: "lid.pintail" });
+  HINGE.springs.forEach((spring, index) => {
+    const gap = [HINGE.knuckles[index].x[1], HINGE.knuckles[index + 1].x[0]];
+    const c = k.coil(spring.x[0], spring.x[1], [hy, hz], HINGE.coilR, HINGE.turns, "x", P, 14);
+    const leg = k.segment([spring.x[0], hy + HINGE.coilR, hz], [spring.x[0], HINGE.lidLeaves[index].y[0] + 1.2, top + HINGE.lidLeaves[index].h + 0.05], P);
+    const springSvg = L(c.back, { tone: "mid" }) + S(G.disc(gap[0], gap[1], HINGE.pinR, HF, P), { tone: "hi" }) + L(c.front + leg, { tone: "mid" });
+    put("lid", [(gap[0] + gap[1]) / 2, hy, hz], springSvg, { shapes: [A.disc(HF, gap[0], gap[1], HINGE.pinR, { name: `lid.pin${index}` })], name: `lid.spring${index}` });
+  });
+}
+
+// v2 wiring. A small board on the base carries three vertical headers; each harness ends in a plug that lifts out of
+// its header with its own assembly when the machine comes apart along Z.
+const BOARD = { x: 23, y: 34.6, w: 28, d: 6, r: 0.6 };
+const BOARD_Z = [5, 6.2];
+const HEADER_Z = [6.2, 9.2];
+const PLUG_Z = [9.2, 12.4];
+const HEADER_Y = [36.0, 39.2];
+const PITCH = 1.6;
+const HEADERS = {
+  J1: { pins: 2, x0: 24.4, piece: "battery", label: ["−", "+"] },
+  J2: { pins: 4, x0: 29.8, piece: "mech", label: ["L1", "M2", "M1", "L2"] },
+  J3: { pins: 6, x0: 38.6, piece: "lid", label: ["BL", "AC", "BC", "AR", "AL", "BR"] },
+};
+for (const h of Object.values(HEADERS)) {
+  h.w = h.pins * PITCH + 0.4;
+  h.x1 = h.x0 + h.w;
+  h.cx = (h.x0 + h.x1) / 2;
+  h.pinX = Array.from({ length: h.pins }, (_, i) => h.x0 + 0.2 + PITCH * (i + 0.5));
+}
+const PIN_Y = (HEADER_Y[0] + HEADER_Y[1]) / 2;
+const WIRE_R = { lead: 0.35, pair: 0.75, lid: 1.0 };
+
+function cable(name, piece, points, r, { tone = "mid", bend = 4, touch, limp = true, maxLength = 12, bias = 0.05 } = {}) {
+  const route = G.fillet(points, Math.max(bend, r * 2.6), 10, { P, tube: r });
+  R.route(name, route, r, { limp, touch, piece, move: PIECES[piece].move, ride: piece });
+  tubePieces(route, r, P, { maxLength, spacing: Math.max(0.5, Math.min(1.6, r)) }).forEach((pc, index) =>
+    put(piece, pc.mid, tubeSvg(pc, { tone }), { bias, shapes: [A.tube(pc.points, pc.radii)], name: `${name}:${index}`, route: name, chunk: index }),
+  );
+  return route;
+}
+function boxPart(piece, name, [x0, y0, z0], [x1, y1, z1], { tone = "mid", r = 0.3, bevel = 0.2, extra = "", inner = "", seam = null, bias = 0 } = {}) {
+  const plan = { x: x0, y: y0, w: x1 - x0, d: y1 - y0, r };
+  const seamLine = seam === null ? "" : L(k.sideSeam(plan, seam, P, 2), { tone: "faint" });
+  put(piece, [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], S(k.slabOf(plan, z0, z1 - z0, P, 2, bevel), { tone, inner: inner + seamLine }) + extra, { bias, shapes: [slabShape(plan, z0, z1 - z0, name)], name });
+}
+
+function wiresV2() {
+  // board, standoffs, traces
+  const top = BOARD_Z[1];
+  const corners = [[BOARD.x + 1.3, BOARD.y + 1.2], [BOARD.x + BOARD.w - 1.3, BOARD.y + 1.2], [BOARD.x + 1.3, BOARD.y + BOARD.d - 1.2], [BOARD.x + BOARD.w - 1.3, BOARD.y + BOARD.d - 1.2]];
+  corners.forEach(([x, y], index) => put("base", [x, y, 4], S(k.cylinder(x, y, 0.75, Z_BASE, BOARD_Z[0] - Z_BASE, P, 12), { tone: "mid", crease: "none" }), { shapes: [A.cylinder(x, y, 0.75, Z_BASE, BOARD_Z[0] - Z_BASE, { name: `base.standoff${index}` })], name: `base.standoff${index}` }));
+  const pin = (h, i, dy) => [HEADERS[h].pinX[i], dy, top];
+  const yb1 = HEADER_Y[0] - 0.9;
+  const yb2 = HEADER_Y[0] - 1.7;
+  const yf = [HEADER_Y[1] + 0.7, HEADER_Y[1] + 1.2, HEADER_Y[1] + 1.7];
+  const trace = (points) => k.pathOf(points.map((p) => at(p)));
+  const traces = [
+    // − : J1.1 → J3.AL, J3.BR along the outer back track
+    trace([pin("J1", 0, HEADER_Y[0]), pin("J1", 0, yb2), pin("J3", 5, yb2), pin("J3", 5, HEADER_Y[0])]),
+    trace([pin("J3", 4, yb2), pin("J3", 4, HEADER_Y[0])]),
+    // + : J1.2 → J3.AR on the inner back track, and → J2.L1 in front
+    trace([pin("J1", 1, HEADER_Y[0]), pin("J1", 1, yb1), pin("J3", 3, yb1), pin("J3", 3, HEADER_Y[0])]),
+    trace([pin("J1", 1, HEADER_Y[1]), pin("J1", 1, yf[0]), pin("J2", 0, yf[0]), pin("J2", 0, HEADER_Y[1])]),
+    // J3 → J2, nested in front: BL → L2, AC → M1, BC → M2
+    trace([pin("J3", 0, HEADER_Y[1]), pin("J3", 0, yf[0]), pin("J2", 3, yf[0]), pin("J2", 3, HEADER_Y[1])]),
+    trace([pin("J3", 1, HEADER_Y[1]), pin("J3", 1, yf[1]), pin("J2", 2, yf[1]), pin("J2", 2, HEADER_Y[1])]),
+    trace([pin("J3", 2, HEADER_Y[1]), pin("J3", 2, yf[2]), pin("J2", 1, yf[2]), pin("J2", 1, HEADER_Y[1])]),
+  ].join("");
+  const pads = [
+    ...[yb2, yb1].flatMap((y) => []),
+    pin("J1", 0, yb2), pin("J3", 5, yb2), pin("J3", 4, yb2), pin("J1", 1, yb1), pin("J3", 3, yb1),
+    pin("J1", 1, yf[0]), pin("J2", 0, yf[0]), pin("J3", 0, yf[0]), pin("J2", 3, yf[0]), pin("J3", 1, yf[1]), pin("J2", 2, yf[1]), pin("J3", 2, yf[2]), pin("J2", 1, yf[2]),
+  ];
+  const holes = corners.map(([x, y]) => k.ring(x, y, 0.9, top, P, 12)).join("");
+  const boardSvg =
+    S(k.slabOf(BOARD, BOARD_Z[0], top - BOARD_Z[0], P, 3, 0.3), { tone: "lo" }) +
+    L(trace([[BOARD.x + 1, BOARD.y + BOARD.d - 0.6, top], [BOARD.x + BOARD.w - 1, BOARD.y + BOARD.d - 0.6, top]]), { tone: "faint" }) +
+    L(traces, { tone: "mid" }) +
+    L(holes, { tone: "lo" }) +
+    D(pads.map(at), { size: 0.45, tone: "hi" }) +
+    D(corners.map(([x, y]) => at([x, y, top])), { size: 0.45 });
+  put("base", [BOARD.x + BOARD.w / 2, BOARD.y + BOARD.d / 2, 5.6], boardSvg, { shapes: [slabShape(BOARD, BOARD_Z[0], top - BOARD_Z[0], "base.board")], name: "base.board" });
+
+  for (const [id, h] of Object.entries(HEADERS)) {
+    boxPart("base", `base.header.${id}`, [h.x0, HEADER_Y[0], HEADER_Z[0]], [h.x1, HEADER_Y[1], HEADER_Z[1]], { tone: "mid", seam: HEADER_Z[0] + 1.1 });
+    const ribs = L(h.pinX.map((x) => trace([[x, HEADER_Y[1] - 0.25, PLUG_Z[0]], [x, HEADER_Y[1] - 0.25, PLUG_Z[1]]])).join(""), { tone: "faint" });
+    boxPart(h.piece, `${h.piece}.plug.${id}`, [h.x0 + 0.25, HEADER_Y[0] + 0.25, PLUG_Z[0]], [h.x1 - 0.25, HEADER_Y[1] - 0.25, PLUG_Z[1]], { tone: "hi", inner: ribs });
+  }
+
+  // battery: two-core lead from the tray's front face round the foot to J1
+  const r2 = WIRE_R.pair;
+  const top2 = PLUG_Z[1];
+  const lift = PLUG_Z[1] + 6.5;
+  const floor = Z_BASE + r2 + 0.05;
+  const footTop = 6 + r2 + 0.05;
+  const mid = (PLUG_Z[0] + PLUG_Z[1]) / 2;
+  const face = { back: HEADER_Y[0] + 0.25, left: (h) => HEADERS[h].x0 + 0.25, right: (h) => HEADERS[h].x1 - 0.25 };
+  cable("wire.battery", "battery", [[-45, 8.6, floor], [-45, PIN_Y, floor], [11, PIN_Y, floor], [18.5, PIN_Y, mid], [face.left("J1"), PIN_Y, mid]], r2, { touch: ["base.plate"] });
+
+  // motor: a boot over the two tabs on the end cap, the lead under the motor and through the bracket's notch to J2
+  const MX = M.CENTRE.pinion[0];
+  boxPart("mech", "mech.motorboot", [MX - 2.4, -17.0, 22.0], [MX + 2.4, -15.0, 24.6], { tone: "lo" });
+  const mx = HEADERS.J2.cx + 1.5;
+  const lx = HEADERS.J2.cx - 1.5;
+  cable("wire.motor", "mech", [[MX, -16, 22.0], [MX, -16, floor], [MX, 0, floor], [mx, 7, floor], [mx, 12, footTop], [mx, 27, footTop], [mx, 31.5, mid], [mx, face.back, mid]], r2, { touch: ["base.plate", "mech.foot"] });
+
+  // limit switch: a boot on its end face, the lead down to the foot and along it behind the gears to J2
+  boxPart("mech", "mech.limitboot", [-17.0, 23.9, 19.4], [-14.8, 27.1, 23.4], { tone: "lo" });
+  cable("wire.limit", "mech", [[-14.8, 26.3, 21.4], [-9, 26.3, 21.4], [-9, 26.3, footTop], [-9, 18.2, footTop], [lx, 18.2, footTop], [lx, 28.5, footTop], [lx, 32.5, mid], [lx, face.back, mid]], r2, { touch: ["mech.foot"], bend: 6 });
+
+  // lid: six leads from the toggle's lugs into an inline housing, one six-core cable over the motor to J3
+  const H0 = [0.2, 9.4, 33.6];
+  const H1 = [12.8, 13.4, 36.6];
+  boxPart("lid", "lid.housing", H0, H1, { tone: "hi", seam: H0[2] + 1.5 });
+  const lugX = [-4, 0, 4].map((dx) => TOG.x + dx);
+  const lugY = [TOG.y - 2.2, TOG.y + 2.2];
+  lugX.forEach((x, i) => cable(`wire.lead.a${i}`, "lid", [[x, lugY[0], 45], [x, lugY[0], H1[2]]], WIRE_R.lead, { limp: false, maxLength: 20 }));
+  lugX.forEach((x, i) =>
+    cable(`wire.lead.b${i}`, "lid", [[x, lugY[1] - 0.6, 47.0], [x + 0.2, 14.4, 47.0], [x + 2, 12.4, 46.4], [x + 2, 11.0, 44.4], [x + 2, 11.0, H1[2]]], WIRE_R.lead, { limp: false, bend: 1.2, maxLength: 6 }),
+  );
+  const rl = WIRE_R.lid;
+  cable("wire.lid", "lid", [[H1[0], 11.4, 35.1], [17.5, 11.4, 35.1], [24, 11.4, 42.6], [62.4, 11.4, 42.6], [62.4, 11.4, (PLUG_Z[0] + PLUG_Z[1]) / 2], [62.4, PIN_Y, (PLUG_Z[0] + PLUG_Z[1]) / 2], [HEADERS.J3.x1 - 0.25, PIN_Y, (PLUG_Z[0] + PLUG_Z[1]) / 2]], rl, { tone: "mid", bend: 6 });
+}
+
 function lidFrontItems() {
+  if (V2) return lidFrontV2();
   const front = { x: BOX.x, y: SLIT[1], w: BOX.w, d: BOX.y + BOX.d - SLIT[1], r: 2.4 };
   const svg =
     `<g class="um-glass">${S(k.slabOf(front, Z_LID, LID_H, P, 4, 0.6), { tone: "hi" })}</g>` +
@@ -231,8 +431,26 @@ mechDynamicItems(gears);
 lidBackItems();
 mechFrontItems();
 lidFrontItems();
+if (V2) wiresV2();
 
-const KEYS = join(HERE, "keys.json");
+// The mounting foot is a 97 × 20 × 3 plate that the audit's slender rule reads as a rod of radius 10, so any lead that
+// runs on it or rises off it near the headers "lands on its outline"; the leads cross it as a floor, not as a line.
+const CROWD_OK = V2 ? [["wire.*", "mech.foot"]] : [];
+if (V2 && process.argv.includes("--wires")) {
+  const mounts = A.mountsOf(R.tubes, R.solids);
+  const items = R.items;
+  const wired = items.filter((item) => item.route);
+  const result = {
+    clearance: A.clearances(R.tubes, R.solids, { mounts }),
+    terminals: A.terminals(R.tubes, R.solids, { mounts }),
+    folds: A.folds(R.routes, P, { items }),
+    self: A.selfOverlaps(wired, P),
+    crowding: A.crowding(R.routes, P, { links: A.linksOf(R.tubes, mounts), items, allow: CROWD_OK, rods: A.slenderOf(R.solids) }),
+  };
+  console.log(A.report(result));
+  process.exit(A.failures(result) ? 1 : 0);
+}
+const KEYS = join(HERE, V2 ? "keys-v2.json" : "keys.json");
 const original = R.items.map((item) => item.key);
 let settled = null;
 if (process.argv.includes("--cached") && existsSync(KEYS)) {
@@ -244,8 +462,9 @@ if (process.argv.includes("--cached") && existsSync(KEYS)) {
   writeFileSync(KEYS, JSON.stringify(R.items.map((item) => item.key)));
 }
 const named = (name) => R.items.find((item) => item.name === name);
+const LIFT_GAP = V2 ? 0.3 : 0.02;
 const lift = (item, ...behind) => {
-  item.key = Math.max(item.key, ...behind.map((other) => other.key + 0.02));
+  item.key = Math.max(item.key, ...behind.map((other) => other.key + LIFT_GAP));
 };
 {
   const [toggle, back, nut, dome, lever, pin, arm, front, leaf, spacer] = ["lid.toggle", "lid.back", "lid.nut", "lid.dome", "lid.lever", "mech.pin", "mech.arm", "lid.front", "mech.leaf", "mech.spacer"].map(named);
@@ -253,11 +472,101 @@ const lift = (item, ...behind) => {
   lift(lever, toggle, back, nut, dome, pin);
   lift(arm, toggle, back, nut, dome, pin, lever, leaf, spacer, named("mech.plate"), named("mech.gear.out"), named("mech.gear.second"), named("mech.gear.stage"));
   lift(front, arm);
+  if (V2) {
+    const liftGroup = (group, ...behind) => {
+      const floor = Math.max(...behind.map((other) => other.key)) + LIFT_GAP;
+      const low = Math.min(...group.map((item) => item.key));
+      if (low < floor) group.forEach((item) => (item.key += floor - low));
+    };
+    const door = named("lid.door");
+    const hinge = R.items.filter((item) => /^lid\.(knuckle|leaf|spring|pinhead|pintail)/.test(item.name));
+    const under = R.items.filter((item) => item !== door && item !== front && !hinge.includes(item));
+    lift(door, ...under);
+    lift(front, door);
+    liftGroup(hinge, front, door);
+  }
 }
 if (process.argv.includes("--keys")) {
   console.log(R.items.map((i) => `${i.key.toFixed(1)} ${i.name} shapes=${i.shapes.length}`).sort((a, b) => parseFloat(a) - parseFloat(b)).join("\n"));
 }
 R.items.sort((a, b) => a.key - b.key);
+
+// v2 takes the machine apart in one step per axis: Z lifts the three assemblies, Y pulls the arm and the gear train
+// off their shafts, X slides the cells out of their tray. Each later step is settled and audited from the pose the
+// previous steps leave, with its own painter's keys.
+const rideBy = (table) => (item) => {
+  for (const [ride, test] of table) if (test.test(item.name)) return ride;
+  return null;
+};
+const STAGES = [
+  { id: "z", name: "lift along Z", order: STAGGER, rides: Object.fromEntries(Object.entries(PIECES).map(([id, piece]) => [id, piece.move])), of: (item) => item.piece },
+  ...(V2
+    ? [
+        {
+          id: "y",
+          name: "pull along Y",
+          order: ["arm", "spacer", "cap", "out", "compound", "pinion"],
+          rides: { arm: [0, 64, 0], spacer: [0, 50, 0], cap: [0, 44, 0], out: [0, 38, 0], compound: [0, 24, 0], pinion: [0, 12, 0] },
+          of: rideBy([["arm", /^mech\.(arm|pin)$/], ["spacer", /^mech\.spacer$/], ["cap", /^mech\.axle$/], ["out", /^mech\.gear\.out$/], ["compound", /^mech\.gear\.(stage|second)$/], ["pinion", /^mech\.(gear\.pinion|shaft\.motor)$/]]),
+        },
+        {
+          id: "x",
+          name: "slide along X",
+          order: ["clip", "cell2", "cell1", "cell0"],
+          rides: { clip: [52, 0, 0], cell2: [22, 0, 0], cell1: [32, 0, 0], cell0: [42, 0, 0] },
+          of: rideBy([["clip", /^battery\.clip$/], ["cell0", /^battery\.cell0$/], ["cell1", /^battery\.cell1$/], ["cell2", /^battery\.cell2$/]]),
+        },
+      ]
+    : []),
+];
+const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const moveIn = (stage, item) => {
+  const ride = stage.of(item);
+  return ride && stage.rides[ride] ? stage.rides[ride] : [0, 0, 0];
+};
+const priorOf = (item, count) => STAGES.slice(0, count).reduce((sum, stage) => add3(sum, moveIn(stage, item)), [0, 0, 0]);
+for (const item of R.items) item.keys = [item.key];
+const STAGE_R = [R];
+const STAGE_KEYS = join(HERE, "keys-v2-stages.json");
+const stageCache = V2 && process.argv.includes("--cached") && existsSync(STAGE_KEYS) ? JSON.parse(readFileSync(STAGE_KEYS, "utf8")) : null;
+for (let s = 1; s < STAGES.length; s++) {
+  const stage = STAGES[s];
+  const Rs = A.recorder(P, { order: stage.order, spring: SPRING });
+  for (const item of R.items) {
+    const prior = priorOf(item, s);
+    const ride = stage.of(item);
+    const shapes = item.shapes.map((shape) => (R.solids.includes(shape) ? Rs.solid({ ...A.moved(shape, prior) }) : { ...A.moved(shape, prior) }));
+    Rs.put({ name: item.name, piece: ride ?? "still", ride: ride ?? "still", move: moveIn(stage, item), key: item.keys[s - 1] + dot3(moveIn(STAGES[s - 1], item), V), shapes, source: item, route: item.route, chunk: item.chunk });
+  }
+  for (const tube of R.tubes) Rs.tubes.push({ ...A.moved(tube, priorOf(tube, s)), move: [0, 0, 0], ride: "still", piece: "still" });
+  for (const route of R.routes) Rs.routes.push({ ...route, points: route.points.map((p) => add3(p, priorOf(route, s))), move: [0, 0, 0], ride: "still", piece: "still" });
+  const cached = stageCache && stageCache[s] && stageCache[s].length === Rs.items.length ? stageCache[s] : null;
+  if (cached) Rs.items.forEach((one, index) => (one.key = cached[index]));
+  else if (!process.argv.includes("--noseatle")) A.settle(Rs, P);
+  Rs.items.forEach((one) => one.source.keys.push(one.key));
+  STAGE_R.push(Rs);
+}
+if (V2 && !stageCache && !process.argv.includes("--noseatle")) writeFileSync(STAGE_KEYS, JSON.stringify(STAGE_R.map((Rs, s) => (s ? Rs.items.map((one) => one.key) : []))));
+
+function fitOf(count) {
+  const pts = [];
+  for (const item of R.items) {
+    const offset = priorOf(item, count);
+    for (const shape of item.shapes) {
+      if (shape.ground && item.name === "base.halo") continue;
+      const b = A.boundsOf(A.moved(shape, offset));
+      for (const x of [b.min[0], b.max[0]]) for (const y of [b.min[1], b.max[1]]) for (const z of [b.min[2], b.max[2]]) pts.push(at([x, y, z]));
+    }
+  }
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  const box = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  const inner = [140, 70, W - 140, H - 70];
+  const s = Math.min((inner[2] - inner[0]) / (box[2] - box[0]), (inner[3] - inner[1]) / (box[3] - box[1]), 1);
+  const c = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2];
+  return { s, tx: W / 2 - ((W / 2) * (1 - s) + s * c[0]), ty: H / 2 - ((H / 2) * (1 - s) + s * c[1]) };
+}
 
 const CALLS = [
   { id: 1, name: "Base plate", say: "Base plate on four feet; everything bolts to it.", match: /^base\.(plate|foot|halo)/, piece: "base", anchor: [44, 38, 3], side: "R", dy: 20 },
@@ -273,11 +582,31 @@ const CALLS = [
   { id: 11, name: "Toggle switch", say: "DPDT toggle: two switches in one body. It swaps which battery terminal goes to which motor terminal.", match: /^lid\.(toggle|lug|nut)/, piece: "lid", anchor: [TOG.x, TOG.y - 3.6, Z_LID + LID_H + 2.2], side: "R", dy: 16 },
   { id: 12, name: "Toggle lever", say: `Lever, flips ±${M.LEVER.throw}°. It snaps over centre, so the arm only has to push it halfway.`, match: /^lid\.(lever|dome)/, piece: "lid", dyn: "lever", side: "R", dy: -22 },
 ];
+if (V2) {
+  const lid = CALLS.find((call) => call.id === 10);
+  Object.assign(lid, { say: "Clear acrylic lid: a back plate with an L-shaped opening, and a front strip that carries the door hinge.", match: /^lid\.(back|front|ledge)/, anchor: [-50, 37, 63] });
+  Object.assign(CALLS.find((call) => call.id === 4), { match: /^mech\.motor/ });
+  Object.assign(CALLS.find((call) => call.id === 5), { match: /^mech\.(gear|axle|shaft)/, say: "Two stages, 8 teeth driving 24 teeth, twice: 9 : 1. The motor turns nine times for every turn of the arm. In the take-apart they slide off their shafts along Y." });
+  for (const [id, rides] of [[3, { x: "cell2" }], [5, { y: "compound" }], [7, { y: "arm" }], [8, { y: "arm" }]]) CALLS.find((call) => call.id === id).rides = rides;
+  CALLS.push({ id: 14, name: "Wiring board", say: "Small board on the base with three headers: battery (2 pins), mechanism (4) and lid (6). Its traces join them the way the circuit below does.", match: /^base\.(board|header|standoff)/, piece: "base", anchor: [BOARD.x + 4, BOARD.y + BOARD.d, BOARD_Z[1]], side: "R", dy: 36 });
+  CALLS.push({ id: 15, name: "Harnesses", say: "Four leads, each with a plug that lifts out of its header with its own assembly: battery, motor, limit switch, and six wires from the toggle's lugs.", match: /^(wire\.|battery\.plug|mech\.plug|lid\.plug|mech\.(motorboot|limitboot)|lid\.housing)/, piece: "mech", anchor: [6, 25.5, 6.8], side: "L", dy: 46 });
+  CALLS.push({ id: 13, name: "Door", say: "Acrylic door on a pin hinge. The arm pushes it open from below and it rests on the arm's side; two torsion springs pull it shut as the arm drops back.", match: /^lid\.(door|knuckle|leaf|spring|pinhead|pintail)/, piece: "lid", dyn: "door", side: "L", dy: -40 });
+  Object.assign(CALLS.find((call) => call.id === 7), { say: `Arm, ${M.ARM.length} mm long and bent ${Math.round(M.ARM.bend / M.RAD)}°, on the output shaft. It swings up through the door in the lid.` });
+  CALLS.sort((a, b) => a.id - b.id);
+}
 for (const item of R.items) item.calls = CALLS.filter((call) => call.match.test(item.name)).map((call) => call.id);
 
 const groups = R.items.map((item, index) => {
   const [mx, my, mz] = item.move;
-  return `<g class="it" data-piece="${item.piece}" data-k="${item.key.toFixed(2)}" data-m="${mx},${my},${mz}" data-i="${index}"${item.dyn ? ` data-dyn="${item.dyn}"` : ""}${item.calls.length ? ` data-c="${item.calls.join(" ")}"` : ""}>${item.svg}</g>`;
+  const stages = V2
+    ? STAGES.slice(1)
+        .map((stage, s) => {
+          const ride = stage.of(item);
+          return ` data-k${stage.id}="${item.keys[s + 1].toFixed(2)}"${ride ? ` data-r${stage.id}="${ride}"` : ""}`;
+        })
+        .join("")
+    : "";
+  return `<g class="it" data-piece="${item.piece}" data-k="${item.key.toFixed(2)}" data-m="${mx},${my},${mz}" data-i="${index}"${stages}${item.dyn ? ` data-dyn="${item.dyn}"` : ""}${item.calls.length ? ` data-c="${item.calls.join(" ")}"` : ""}>${item.svg}</g>`;
 });
 
 const unit = (vector) => {
@@ -320,24 +649,45 @@ const DATA = {
   pieces: Object.fromEntries(Object.entries(PIECES).map(([id, piece]) => [id, { name: piece.name, move: piece.move }])),
   stagger: STAGGER,
   spring: SPRING,
-  calls: CALLS.map(({ id, name, say, piece, anchor, dyn, side, dy }) => ({ id, name, say, piece, anchor, dyn, side, dy })),
+  calls: CALLS.map(({ id, name, say, piece, anchor, dyn, side, dy, rides }) => ({ id, name, say, piece, anchor, dyn, side, dy, rides })),
+  v2: V2,
+  door: V2 ? DOOR_TABLE : null,
+  stages: V2 ? STAGES.map((stage, s) => ({ id: stage.id, name: stage.name, order: stage.order, rides: stage.rides, fit: fitOf(s + 1) })) : null,
 };
 
-const circuit = readFileSync(join(HERE, "circuit.svg"), "utf8");
+const circuit = readFileSync(join(HERE, V2 ? "circuit-v2.svg" : "circuit.svg"), "utf8");
 const css = readFileSync(join(HERE, "um.css"), "utf8");
 const inline = (file) => readFileSync(join(HERE, file), "utf8").replace(/^import .*$/gm, "").replace(/^export \{[^}]*\};?$/gm, "").replace(/^export /gm, "");
 const live = readFileSync(join(HERE, "live.js"), "utf8").replace("__DATA__", JSON.stringify(DATA));
-const script = [kitScript(), inline("plate.mjs"), inline("model.mjs"), inline("draw.mjs"), live].join("\n");
+const script = [kitScript(), inline("plate.mjs"), inline("model.mjs"), inline("draw.mjs"), ...(V2 ? [inline("door.mjs"), inline("draw2.mjs")] : []), live].join("\n");
 if (process.argv.includes("--check")) new Function(script.replace(/^\s*import .*$/gm, ""));
 
-const label = "A useless machine in cutaway: a box of clear acrylic with its front and right walls removed. A toggle switch on the lid, a DC gearmotor with a 9 to 1 gear train, a curved arm on the output shaft, a limit switch and three AA cells. The arm rises through a slit in the lid, flips the toggle back off and retracts. The lid, the mechanism and the battery pack lift apart along the vertical axis.";
+const label = V2
+  ? "A useless machine in cutaway: a box of clear acrylic with its front and right walls removed. A toggle switch on the lid, a DC gearmotor with a 9 to 1 gear train, a curved arm on the output shaft, a limit switch, three AA cells and a small wiring board. The arm pushes a spring-hinged door open in the lid, flips the toggle back off and retracts, and the door closes behind it. It comes apart in three steps, one per axis."
+  : "A useless machine in cutaway: a box of clear acrylic with its front and right walls removed. A toggle switch on the lid, a DC gearmotor with a 9 to 1 gear train, a curved arm on the output shaft, a limit switch and three AA cells. The arm rises through a slit in the lid, flips the toggle back off and retracts. The lid, the mechanism and the battery pack lift apart along the vertical axis.";
 const svg = k.figureSvg({ width: W, height: H, label, body: `<g class="um-engine">${groups.join("")}</g><g class="um-over"></g>` });
 const parts = CALLS.map((call) => `<li><button type="button" class="um-part" data-c="${call.id}"><span class="um-num">${call.id}</span><span class="um-name">${call.name}</span><span class="um-say">${call.say}</span></button></li>`).join("");
-const controls = `<div class="um-controls"><button type="button" class="um-btn" data-flip><span class="um-lamp" aria-hidden="true"></span><span data-flip-label>Flip the switch</span></button><button type="button" class="um-btn" data-apart>Take apart</button><span class="um-note" data-note aria-live="polite"></span></div>`;
-const caption =
-  "The toggle is a DPDT switch wired across a DC motor. Flipped on, it sends the battery to the motor one way and the arm rises. The arm's pin pushes the lever back over centre, which reverses the motor through the limit switch. The arm retracts until it sits on the limit switch's leaf, which opens the circuit and stops it. Front and right walls removed; the lid, mechanism and battery pack separate along the vertical axis.";
-const body = `<div class="um">${k.plateHtml({ fig: "Fig 1", title: "Useless machine", hint: "Click the switch", readout: "ready", keys: [], caption: "", body: `<div class="iso-stage um-stage" tabindex="0" role="group" aria-label="Useless machine. Space or Enter flips the switch, E takes it apart, the arrow keys step through the parts, Escape clears.">${svg}</div>` }).replace("</div></figure>", `</div>${controls}</figure>`)}<div class="um-below"><div class="um-circuit">${circuit}</div><ol class="um-parts">${parts}</ol></div><p class="iso-caption um-caption">${caption}</p></div>`;
+const controls = `<div class="um-controls"><button type="button" class="um-btn" data-flip><span class="um-lamp" aria-hidden="true"></span><span data-flip-label>Flip the switch</span></button><button type="button" class="um-btn" data-apart>Take apart</button><span class="um-note" data-note aria-live="polite"></span><nav class="um-ver" aria-label="Version"><a href="${pageName(false)}"${V2 ? "" : ' aria-current="page"'}>v1</a><a href="${pageName(true)}"${V2 ? ' aria-current="page"' : ""}>v2</a></nav></div>`;
+const caption = V2
+  ? "The toggle is a DPDT switch wired across a DC motor. Flipped on, it sends the battery to the motor one way: the arm rises, pushes the door open and rests against it, and its pin pushes the lever back over centre. That reverses the motor through the limit switch, so the arm retracts, the door's torsion springs pull it shut behind it, and the arm settles on the limit switch's leaf, which opens the circuit. Every lead plugs into a small board on the base. Front and right walls removed. It comes apart in three steps, one per axis: the lid, mechanism and battery lift along Z; the arm and gears slide off their shafts along Y; the clip and cells slide out along X."
+  : "The toggle is a DPDT switch wired across a DC motor. Flipped on, it sends the battery to the motor one way and the arm rises. The arm's pin pushes the lever back over centre, which reverses the motor through the limit switch. The arm retracts until it sits on the limit switch's leaf, which opens the circuit and stops it. Front and right walls removed; the lid, mechanism and battery pack separate along the vertical axis.";
+const body = `<div class="um">${k.plateHtml({ fig: "Fig 1", title: "Useless machine", hint: "Click the switch", readout: "ready", keys: [], caption: "", body: `<div class="iso-stage um-stage" tabindex="0" role="group" aria-label="${V2 ? "Useless machine. Space or Enter flips the switch, E takes it apart one axis at a time, the arrow keys step through the parts, Escape clears." : "Useless machine. Space or Enter flips the switch, E takes it apart, the arrow keys step through the parts, Escape clears."}">${svg}</div>` }).replace("</div></figure>", `</div>${controls}</figure>`)}<div class="um-below"><div class="um-circuit">${circuit}</div><ol class="um-parts">${parts}</ol></div><p class="iso-caption um-caption">${caption}</p></div>`;
 const page = k.pageHtml({ title: "Useless machine", theme: THEME, body: `<style>${css}</style>${body}`, script, width: 1000 });
-writeFileSync(join(HERE, `useless-machine${THEME === "light" ? "-light" : ""}.html`), page);
+writeFileSync(join(HERE, pageName(V2)), page);
 console.log("wrote", `${R.items.length} items`, `${(page.length / 1024).toFixed(0)} KB`, `fit ${fit.toFixed(2)}`);
-A.auditOrExit(R, P, {});
+const first = A.auditOrExit(R, P, { crowd: CROWD_OK });
+if (first && V2) {
+  let problems = 0;
+  for (let s = 1; s < STAGE_R.length; s++) {
+    const Rs = STAGE_R[s];
+    if (!Rs.settled) A.settle(Rs, P);
+    const result = A.audit(Rs, P, { ground: () => true, crowd: CROWD_OK });
+    const count = A.failures(result);
+    problems += count;
+    console.log(`\nstep ${STAGES[s].id} (${STAGES[s].name}), from the pose the earlier steps leave:`);
+    console.log(A.report(result));
+    console.log(count ? `step ${STAGES[s].id}: ${count} problems` : `step ${STAGES[s].id}: passed`);
+  }
+  console.log(problems ? `steps failed: ${problems} problems` : "all steps passed");
+  if (problems) process.exitCode = 1;
+}
