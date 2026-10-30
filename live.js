@@ -14,7 +14,7 @@ const autoBtn = root.querySelector("[data-auto]");
 const infoBtn = root.querySelector("[data-info]");
 const infoBox = root.querySelector(".um-info");
 const partButtons = [...root.querySelectorAll(".um-part")];
-const cc = root.querySelector(".um-circuit svg");
+const cc = root.querySelector("svg.cc");
 const still = matchMedia("(prefers-reduced-motion: reduce)");
 const clampTo = (value, low, high) => Math.min(high, Math.max(low, value));
 const ids = Object.keys(D.pieces);
@@ -567,6 +567,7 @@ function select(id) {
   for (const call of calls) (String(call.id) === String(id) ? call.g.setAttribute("data-on", "") : call.g.removeAttribute("data-on"));
   partButtons.forEach((button) => (button.dataset.c === String(id) ? button.setAttribute("data-on", "") : button.removeAttribute("data-on")));
   showInfo(id);
+  pointPiece(id);
   describe();
 }
 
@@ -857,16 +858,19 @@ if (settingsBtn)
   });
 if (autoBtn) autoBtn.addEventListener("click", () => setAuto(!auto));
 if (infoBtn) infoBtn.addEventListener("click", () => setCalls(!showCalls));
+// v3: a line of the parts list is selected while the pointer is over it (or while it has keyboard focus); a click
+// does not pin it. v1 and v2 pin on click.
 partButtons.forEach((button) => {
   const id = button.dataset.c;
   button.addEventListener("pointerenter", () => !pinned && select(id));
   button.addEventListener("pointerleave", () => !pinned && select(null));
-  button.addEventListener("focus", () => !pinned && select(id));
+  button.addEventListener("focus", () => !pinned && (!D.v3 || button.matches(":focus-visible")) && select(id));
   button.addEventListener("blur", () => !pinned && select(null));
-  button.addEventListener("click", () => {
-    pinned = pinned === id ? null : id;
-    select(pinned ?? id);
-  });
+  if (!D.v3)
+    button.addEventListener("click", () => {
+      pinned = pinned === id ? null : id;
+      select(pinned ?? id);
+    });
 });
 for (const call of calls) {
   call.g.style.pointerEvents = "all";
@@ -914,105 +918,105 @@ describe();
 labelApart();
 showInfo(null);
 stage.setAttribute("data-ready", "");
-// v3 zoom: a pinch on a touch screen, a trackpad pinch or Ctrl + wheel over the drawing zooms into it, up to ZOOM_MAX,
+// v3 zoom: a pinch on a touch screen, a trackpad pinch or Ctrl + wheel over a drawing zooms into it, up to ZOOM_MAX,
 // around the fingers or the pointer. The page itself does not zoom. When the gesture ends the drawing eases back to
-// its normal size. The card clips it, and a thin mask fades it out before the card's edge.
-const viewBox = stage.querySelector(".um-view");
+// its normal size. Its box clips it, and a thin mask fades it out before the edge. The main figure and the piece view
+// each get one.
 const ZOOM_MAX = 2.6;
-const zoom = { z: 1, x: 0, y: 0, frame: 0, wheel: 0, pinch: null, base: 1 };
-function applyZoom() {
-  const { z, x, y } = zoom;
-  svg.style.transform = z === 1 && !x && !y ? "" : `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) scale(${z.toFixed(4)})`;
-  stage.toggleAttribute("data-zoomed", z > 1.01);
-}
-function clampPan() {
-  const w = viewBox.clientWidth;
-  const h = viewBox.clientHeight;
-  zoom.x = clampTo(zoom.x, w - w * zoom.z, 0);
-  zoom.y = clampTo(zoom.y, h - h * zoom.z, 0);
-}
-const localOf = (clientX, clientY) => {
-  const r = viewBox.getBoundingClientRect();
-  return [clientX - r.left, clientY - r.top];
-};
-function zoomAt([px, py], z) {
-  const next = clampTo(z, 1, ZOOM_MAX);
-  zoom.x = px - ((px - zoom.x) * next) / zoom.z;
-  zoom.y = py - ((py - zoom.y) * next) / zoom.z;
-  zoom.z = next;
-  clampPan();
-  applyZoom();
-}
-function holdZoom() {
-  cancelAnimationFrame(zoom.frame);
-  zoom.frame = 0;
-}
-function releaseZoom() {
-  holdZoom();
-  if (still.matches) {
-    Object.assign(zoom, { z: 1, x: 0, y: 0 });
-    return applyZoom();
-  }
-  let last = performance.now();
-  const back = (time) => {
-    const f = 1 - Math.exp(-Math.min(0.05, (time - last) / 1000) / 0.09);
-    last = time;
-    zoom.z += (1 - zoom.z) * f;
-    zoom.x -= zoom.x * f;
-    zoom.y -= zoom.y * f;
-    const done = zoom.z - 1 < 0.002 && Math.abs(zoom.x) < 0.3 && Math.abs(zoom.y) < 0.3;
-    if (done) Object.assign(zoom, { z: 1, x: 0, y: 0 });
-    applyZoom();
-    zoom.frame = done ? 0 : requestAnimationFrame(back);
+function zoomable(view, content, host) {
+  const zoom = { z: 1, x: 0, y: 0, frame: 0, wheel: 0, pinch: null, base: 1 };
+  const apply = () => {
+    const { z, x, y } = zoom;
+    content.style.transform = z === 1 && !x && !y ? "" : `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) scale(${z.toFixed(4)})`;
+    host.toggleAttribute("data-zoomed", z > 1.01);
   };
-  zoom.frame = requestAnimationFrame(back);
-}
-if (viewBox) {
+  const clampPan = () => {
+    const w = view.clientWidth;
+    const h = view.clientHeight;
+    zoom.x = clampTo(zoom.x, w - w * zoom.z, 0);
+    zoom.y = clampTo(zoom.y, h - h * zoom.z, 0);
+  };
+  const localOf = (clientX, clientY) => {
+    const r = view.getBoundingClientRect();
+    return [clientX - r.left, clientY - r.top];
+  };
+  const zoomAt = ([px, py], z) => {
+    const next = clampTo(z, 1, ZOOM_MAX);
+    zoom.x = px - ((px - zoom.x) * next) / zoom.z;
+    zoom.y = py - ((py - zoom.y) * next) / zoom.z;
+    zoom.z = next;
+    clampPan();
+    apply();
+  };
+  const hold = () => {
+    cancelAnimationFrame(zoom.frame);
+    zoom.frame = 0;
+  };
+  const release = () => {
+    hold();
+    if (still.matches) {
+      Object.assign(zoom, { z: 1, x: 0, y: 0 });
+      return apply();
+    }
+    let last = performance.now();
+    const back = (time) => {
+      const f = 1 - Math.exp(-Math.min(0.05, (time - last) / 1000) / 0.09);
+      last = time;
+      zoom.z += (1 - zoom.z) * f;
+      zoom.x -= zoom.x * f;
+      zoom.y -= zoom.y * f;
+      const done = zoom.z - 1 < 0.002 && Math.abs(zoom.x) < 0.3 && Math.abs(zoom.y) < 0.3;
+      if (done) Object.assign(zoom, { z: 1, x: 0, y: 0 });
+      apply();
+      zoom.frame = done ? 0 : requestAnimationFrame(back);
+    };
+    zoom.frame = requestAnimationFrame(back);
+  };
   // trackpad pinches arrive as wheel events with ctrlKey set (Chrome, Edge, Firefox); a mouse needs Ctrl held
-  viewBox.addEventListener(
+  view.addEventListener(
     "wheel",
     (event) => {
       if (!event.ctrlKey) return;
       event.preventDefault();
-      holdZoom();
+      hold();
       const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
       zoomAt(localOf(event.clientX, event.clientY), zoom.z * Math.exp(-delta * 0.01));
       clearTimeout(zoom.wheel);
-      zoom.wheel = setTimeout(releaseZoom, 180);
+      zoom.wheel = setTimeout(release, 180);
     },
     { passive: false },
   );
   // Safari's trackpad pinch; on iOS the touch handlers below do the work and these only stop the page zooming
-  viewBox.addEventListener("gesturestart", (event) => {
+  view.addEventListener("gesturestart", (event) => {
     event.preventDefault();
     if (zoom.pinch) return;
-    holdZoom();
+    hold();
     zoom.base = zoom.z;
   });
-  viewBox.addEventListener("gesturechange", (event) => {
+  view.addEventListener("gesturechange", (event) => {
     event.preventDefault();
     if (!zoom.pinch) zoomAt(localOf(event.clientX, event.clientY), zoom.base * event.scale);
   });
-  viewBox.addEventListener("gestureend", (event) => {
+  view.addEventListener("gestureend", (event) => {
     event.preventDefault();
-    if (!zoom.pinch) releaseZoom();
+    if (!zoom.pinch) release();
   });
   const pinchOf = (touches) => {
     const [a, b] = [touches[0], touches[1]];
     return { at: localOf((a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2), d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) };
   };
-  viewBox.addEventListener(
+  view.addEventListener(
     "touchstart",
     (event) => {
       if (event.touches.length !== 2) return;
       event.preventDefault();
-      holdZoom();
+      hold();
       const { at, d } = pinchOf(event.touches);
       zoom.pinch = { d, z: zoom.z, cx: (at[0] - zoom.x) / zoom.z, cy: (at[1] - zoom.y) / zoom.z };
     },
     { passive: false },
   );
-  viewBox.addEventListener(
+  view.addEventListener(
     "touchmove",
     (event) => {
       if (!zoom.pinch || event.touches.length < 2) return;
@@ -1022,17 +1026,127 @@ if (viewBox) {
       zoom.x = at[0] - zoom.pinch.cx * zoom.z;
       zoom.y = at[1] - zoom.pinch.cy * zoom.z;
       clampPan();
-      applyZoom();
+      apply();
     },
     { passive: false },
   );
   const endPinch = (event) => {
     if (!zoom.pinch || event.touches.length >= 2) return;
     zoom.pinch = null;
-    releaseZoom();
+    release();
   };
-  viewBox.addEventListener("touchend", endPinch);
-  viewBox.addEventListener("touchcancel", endPinch);
+  view.addEventListener("touchend", endPinch);
+  view.addEventListener("touchcancel", endPinch);
+  return zoom;
+}
+const viewBox = stage.querySelector(".um-view");
+const zoom = viewBox ? zoomable(viewBox, svg, stage) : null;
+
+// v3 panel: two tabs, the circuit and the piece view. The piece view shows the last part the reader pointed at (a
+// number, or a line of the parts list), drawn alone at azimuths 36°-64° and swinging slowly between them. Its frames
+// load from pieces/<id>.json the first time that part is shown.
+const tabs = [...root.querySelectorAll("[data-tab]")];
+const pane = {
+  view: root.querySelector(".um-pview"),
+  svg: root.querySelector(".um-psvg"),
+  frames: root.querySelector("[data-frames]"),
+  empty: root.querySelector("[data-pempty]"),
+  cap: root.querySelector("[data-pcap]"),
+  num: root.querySelector("[data-pnum]"),
+  name: root.querySelector("[data-pname]"),
+};
+const pieceView = {
+  open: false,
+  onScreen: false,
+  want: null,
+  shown: null,
+  groups: [],
+  index: -1,
+  frame: 0,
+  clock: 0,
+  wait: 0,
+  cache: new Map(),
+};
+const SWING_S = 9;
+function setTab(name) {
+  for (const tab of tabs) {
+    const on = tab.dataset.tab === name;
+    tab.setAttribute("aria-selected", String(on));
+    tab.tabIndex = on ? 0 : -1;
+    root.querySelector(`#${tab.getAttribute("aria-controls")}`).hidden = !on;
+  }
+  pieceView.open = name === "piece";
+  showPiece();
+}
+function loadPiece(id) {
+  if (!pieceView.cache.has(id))
+    pieceView.cache.set(
+      id,
+      fetch(`pieces/${id}.json`)
+        .then((response) => response.json())
+        .catch(() => null),
+    );
+  return pieceView.cache.get(id);
+}
+// select() calls this; the view follows the pointer a beat late, so sweeping across the numbers loads only the last
+function pointPiece(id) {
+  if (id === null || id === undefined) return;
+  pieceView.want = String(id);
+  clearTimeout(pieceView.wait);
+  pieceView.wait = setTimeout(showPiece, 140);
+}
+async function showPiece() {
+  if (!pane.view || !pieceView.open) return turnPiece();
+  const id = pieceView.want;
+  pane.empty.hidden = id !== null;
+  pane.cap.hidden = id === null;
+  if (id === null || id === pieceView.shown) return turnPiece();
+  const call = D.calls.find((c) => String(c.id) === id);
+  pane.num.textContent = call.id;
+  pane.name.textContent = call.name;
+  const data = await loadPiece(id);
+  if (!data || pieceView.want !== id) return;
+  pieceView.shown = id;
+  pane.svg.setAttribute("viewBox", data.view.join(" "));
+  pane.frames.innerHTML = data.frames.map((frame) => frame.replace("<g ", '<g style="display:none" ')).join("");
+  pieceView.groups = [...pane.frames.children];
+  pieceView.index = -1;
+  turnPiece();
+}
+function turnPiece() {
+  cancelAnimationFrame(pieceView.frame);
+  pieceView.frame = 0;
+  if (!pieceView.groups.length) return;
+  const mid = (pieceView.groups.length - 1) / 2;
+  const show = (index) => {
+    if (index === pieceView.index) return;
+    if (pieceView.index >= 0) pieceView.groups[pieceView.index].style.display = "none";
+    pieceView.groups[index].style.display = "";
+    pieceView.index = index;
+  };
+  if (still.matches || !pieceView.open || !pieceView.onScreen) return show(Math.round(mid));
+  let last = performance.now();
+  const step = (time) => {
+    pieceView.clock += Math.min(0.05, (time - last) / 1000);
+    last = time;
+    show(Math.round(mid + mid * Math.sin((pieceView.clock / SWING_S) * 2 * Math.PI)));
+    pieceView.frame = requestAnimationFrame(step);
+  };
+  pieceView.frame = requestAnimationFrame(step);
+}
+if (pane.view) {
+  zoomable(pane.view, pane.svg, pane.view);
+  tabs.forEach((tab) => tab.addEventListener("click", () => setTab(tab.dataset.tab)));
+  root.querySelector(".um-tabs").addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    const next = tabs[(tabs.findIndex((tab) => tab.getAttribute("aria-selected") === "true") + 1) % tabs.length];
+    setTab(next.dataset.tab);
+    next.focus();
+  });
+  new IntersectionObserver((entries) => {
+    pieceView.onScreen = entries[entries.length - 1].isIntersecting;
+    turnPiece();
+  }).observe(pane.view);
 }
 
 // probe(world, piece, rides): the callout ids of the part painted on top at a world point (glass skipped), for checks.

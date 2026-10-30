@@ -169,3 +169,40 @@
 .um-odo[hidden] { display: none; }
 .um-odo b { color: var(--um-ink0); font-weight: 600; font-variant-numeric: tabular-nums; }
 @media (max-width: 760px) { .um-odo { bottom: 6px; font-size: 10px; } }
+.um3 .cc-h { display: none; }
+.um-panel { margin-top: 22px; }
+.um-tabs { display: flex; width: 66%; }
+.um-tabs [role="tab"] { position: relative; flex: 1; height: 38px; margin-right: -1px; padding: 0 16px; border: 1px solid var(--um-ink3); border-bottom: 0; border-radius: 11px 11px 0 0; background: var(--um-dim); color: var(--um-ink1); font: 12.5px var(--anatomy-mono); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; transition: background .2s, color .2s; }
+.um-tabs [role="tab"]:hover { color: var(--um-ink0); background: #ebebee; }
+.um-tabs [role="tab"][aria-selected="true"] { z-index: 1; height: 39px; margin-bottom: -1px; background: var(--anatomy-card); color: var(--um-ink0); font-weight: 600; }
+.um-tabs [role="tab"]:focus-visible { outline: 1px solid var(--um-ink0); outline-offset: -4px; }
+.um-pane { position: relative; height: 400px; padding: 18px 22px; border-radius: 0 12px 12px 12px; background: var(--anatomy-card); box-shadow: 0 0 0 1px var(--um-ink3); }
+.um-pane[hidden] { display: none; }
+.um3 .um-pane .cc { width: auto; height: 100%; max-width: 100%; margin: 0 auto; }
+.um-pview { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; -webkit-mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent), linear-gradient(180deg, transparent, #000 18px, #000 calc(100% - 18px), transparent); -webkit-mask-composite: source-in; mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent), linear-gradient(180deg, transparent, #000 18px, #000 calc(100% - 18px), transparent); mask-composite: intersect; }
+.um-psvg { display: block; width: 100%; height: 100%; padding: 34px 40px 46px; transform-origin: 0 0; }
+.um-pempty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 0 24px; color: var(--anatomy-muted); font: 13px var(--anatomy-mono); letter-spacing: .04em; text-align: center; pointer-events: none; }
+.um-pempty[hidden], .um-pcap[hidden] { display: none; }
+.um-pcap { position: absolute; left: 18px; bottom: 14px; display: flex; align-items: center; gap: 10px; margin: 0; color: var(--anatomy-strong); font-size: 14px; font-weight: 600; pointer-events: none; }
+.um-pcap .um-info-num { width: 26px; height: 26px; font-size: 11.5px; }
+.um-fold { margin-top: 22px; border-radius: 12px; background: var(--anatomy-card); box-shadow: 0 0 0 1px var(--um-ink3); }
+.um-fold > summary { display: flex; align-items: baseline; gap: 12px; padding: 16px 22px; list-style: none; cursor: pointer; }
+.um-fold > summary::-webkit-details-marker { display: none; }
+.um-fold > summary h2 { margin: 0; color: var(--anatomy-strong); font-size: 16.5px; font-weight: 600; letter-spacing: .01em; }
+.um-fold > summary span { color: var(--anatomy-muted); font: 12px var(--anatomy-mono); letter-spacing: .08em; text-transform: uppercase; }
+.um-fold > summary:focus-visible { outline: 1px solid var(--um-ink0); outline-offset: -4px; border-radius: 12px; }
+.um-chev { align-self: center; width: 18px; height: 18px; margin-left: auto; fill: none; stroke: var(--um-ink1); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transform: rotate(-90deg); transition: transform .25s var(--anatomy-ease); }
+.um-fold[open] > summary .um-chev { transform: none; }
+.um-fold[open] > summary { border-bottom: 1px solid var(--um-ink3); }
+.um3 .um-partsfold .um-parts { padding: 14px 22px 12px; columns: 2; column-gap: 32px; }
+.um3 .um-manual { margin-top: 22px; padding: 0; }
+.um3 .um-manual > summary.um-manual-head { justify-content: flex-start; padding: 16px 22px; }
+.um3 .um-manual > summary.um-manual-head span { margin-left: auto; }
+.um3 .um-manual > summary .um-chev { margin-left: 0; }
+.um3 .um-manual-list, .um3 .um-manual-last { margin-left: 22px; margin-right: 22px; }
+@media (max-width: 760px) {
+  .um-tabs { width: 100%; }
+  .um-pane { height: 260px; padding: 12px; border-radius: 0 0 12px 12px; }
+  .um-psvg { padding: 22px 16px 40px; }
+  .um3 .um-partsfold .um-parts { columns: 1; }
+}
