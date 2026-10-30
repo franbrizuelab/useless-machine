@@ -567,7 +567,6 @@ function select(id) {
   for (const call of calls) (String(call.id) === String(id) ? call.g.setAttribute("data-on", "") : call.g.removeAttribute("data-on"));
   partButtons.forEach((button) => (button.dataset.c === String(id) ? button.setAttribute("data-on", "") : button.removeAttribute("data-on")));
   showInfo(id);
-  pointPiece(id);
   describe();
 }
 
@@ -577,8 +576,20 @@ const info = infoBox
   ? { card: infoBox.querySelector("[data-info-card]"), empty: infoBox.querySelector("[data-info-empty]"), num: infoBox.querySelector("[data-info-num]"), name: infoBox.querySelector("[data-info-name]"), say: infoBox.querySelector("[data-info-say]"), shown: null }
   : null;
 let showCalls = true;
+// The box empties a beat after the pointer leaves a number, so it can be reached; while the pointer is over it, it
+// keeps what it shows.
+let infoClear = 0;
+let overBox = false;
 function showInfo(id) {
   if (!info) return;
+  clearTimeout(infoClear);
+  if (id === null && info.shown !== null) {
+    infoClear = setTimeout(() => !overBox && paintInfo(null), 320);
+    return;
+  }
+  paintInfo(id);
+}
+function paintInfo(id) {
   const call = id === null ? null : D.calls.find((c) => String(c.id) === String(id));
   if (call && info.shown !== call.id) {
     info.num.textContent = call.id;
@@ -591,7 +602,15 @@ function showInfo(id) {
   info.shown = call ? call.id : null;
   infoBox.toggleAttribute("data-show", Boolean(call));
   const touch = matchMedia("(hover: none)").matches;
-  info.empty.textContent = showCalls ? `${touch ? "Tap" : "Hover over"} a number to see information about the piece.` : "Numbers are hidden. Turn them on with the i button to see information about each piece.";
+  info.empty.textContent = showCalls ? `${touch ? "Tap" : "Hover over"} a number to see the piece and what it does.` : "Numbers are hidden. Turn them on with the i button to see each piece.";
+  showPiece(call ? call.id : null);
+}
+if (infoBox) {
+  infoBox.addEventListener("pointerenter", () => (overBox = true));
+  infoBox.addEventListener("pointerleave", () => {
+    overBox = false;
+    if (!selected) showInfo(null);
+  });
 }
 
 function say(text) {
@@ -858,12 +877,21 @@ if (settingsBtn)
   });
 if (autoBtn) autoBtn.addEventListener("click", () => setAuto(!auto));
 if (infoBtn) infoBtn.addEventListener("click", () => setCalls(!showCalls));
+// v3 on a touch screen: a tap selects and the selection stays until the same number is tapped again or a tap lands
+// anywhere else; there is no hover to end it.
+const touchy = (event) => D.v3 && event.pointerType === "touch";
+function enterPart(event, id) {
+  if (pinned) return;
+  if (touchy(event) && selected === id) return select(null);
+  select(id);
+}
+const leavePart = (event) => !pinned && !touchy(event) && select(null);
 // v3: a line of the parts list is selected while the pointer is over it (or while it has keyboard focus); a click
 // does not pin it. v1 and v2 pin on click.
 partButtons.forEach((button) => {
   const id = button.dataset.c;
-  button.addEventListener("pointerenter", () => !pinned && select(id));
-  button.addEventListener("pointerleave", () => !pinned && select(null));
+  button.addEventListener("pointerenter", (event) => enterPart(event, id));
+  button.addEventListener("pointerleave", leavePart);
   button.addEventListener("focus", () => !pinned && (!D.v3 || button.matches(":focus-visible")) && select(id));
   button.addEventListener("blur", () => !pinned && select(null));
   if (!D.v3)
@@ -875,9 +903,13 @@ partButtons.forEach((button) => {
 for (const call of calls) {
   call.g.style.pointerEvents = "all";
   call.g.style.cursor = "pointer";
-  call.g.addEventListener("pointerenter", () => !pinned && select(String(call.id)));
-  call.g.addEventListener("pointerleave", () => !pinned && select(null));
+  call.g.addEventListener("pointerenter", (event) => enterPart(event, String(call.id)));
+  call.g.addEventListener("pointerleave", leavePart);
 }
+if (D.v3)
+  document.addEventListener("pointerdown", (event) => {
+    if (event.pointerType === "touch" && selected && !pinned && !event.target.closest(".um-call, .um-part, [data-info-box]")) select(null);
+  });
 stage.addEventListener("keydown", (event) => {
   lastInput = now();
   userTook();
@@ -903,6 +935,321 @@ stage.addEventListener("keydown", (event) => {
   }
 });
 
+// v3 piece view: the part under the pointer, alone, turning steadily one way about the vertical through its centre.
+// It is meshed once from the true shapes the build exports (D.shapes) and drawn on a canvas every frame by the kit's
+// rules: each face shaded in the same four bands by its facing to a light fixed to the camera, an outline wherever a
+// face turns away (silhouette) or meets its neighbour at a crease, everything painted far to near.
+const TURN_S = 12;
+const CREASE = Math.cos((35 * Math.PI) / 180);
+const CAM = (() => {
+  const a = (camP.azimuth * Math.PI) / 180;
+  const e = (camP.elevation * Math.PI) / 180;
+  const l = [-Math.sin(a), Math.cos(a), 1.2];
+  const ll = Math.hypot(...l);
+  return { sinA: Math.sin(a), cosA: Math.cos(a), sinE: Math.sin(e), cosE: Math.cos(e), V: [Math.cos(a) * Math.cos(e), Math.sin(a) * Math.cos(e), Math.sin(e)], L: l.map((x) => x / ll) };
+})();
+const BAND = [0, 0.2, 0.42, 0.62];
+const norm3 = (v) => {
+  const l = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / l, v[1] / l, v[2] / l];
+};
+function meshOf(parts) {
+  const verts = [];
+  const faces = [];
+  const add = (points) => {
+    const start = verts.length;
+    verts.push(...points);
+    return start;
+  };
+  // soft faces (tubes) draw only their silhouettes: a cable is many short chunks, and a crease at every joint and
+  // end cap would string it with rings
+  const face = (idx, n, part, shape, soft = false) => faces.push({ idx, n: norm3(n), part, shape, soft });
+  parts.forEach((part, p) => {
+    part.shapes.forEach((sh, si) => {
+      const shape = `${p}.${si}`;
+      if (sh.k === "p") {
+        const [o, a, u, v] = sh.F;
+        const at = ([x, y], s) => [0, 1, 2].map((i) => o[i] + a[i] * s + u[i] * x + v[i] * y);
+        const n = sh.poly.length;
+        let area = 0;
+        for (let i = 0; i < n; i++) area += sh.poly[i][0] * sh.poly[(i + 1) % n][1] - sh.poly[(i + 1) % n][0] * sh.poly[i][1];
+        const ccw = area > 0 ? 1 : -1;
+        const b0 = add(sh.poly.map((q) => at(q, sh.s[0])));
+        const b1 = add(sh.poly.map((q) => at(q, sh.s[1])));
+        face(sh.poly.map((_, i) => b0 + i), a.map((x) => -x), p, shape);
+        face(sh.poly.map((_, i) => b1 + i), a, p, shape);
+        for (let i = 0; i < n; i++) {
+          const j = (i + 1) % n;
+          const dx = sh.poly[j][0] - sh.poly[i][0];
+          const dy = sh.poly[j][1] - sh.poly[i][1];
+          face([b0 + i, b0 + j, b1 + j, b1 + i], [0, 1, 2].map((k) => ccw * (u[k] * dy - v[k] * dx)), p, shape);
+        }
+      } else if (sh.k === "b") {
+        const [o, a, u, v] = sh.F;
+        const N = 28;
+        const prof = sh.poly;
+        let area = 0;
+        for (let i = 0; i < prof.length; i++) area += prof[i][0] * prof[(i + 1) % prof.length][1] - prof[(i + 1) % prof.length][0] * prof[i][1];
+        const ccw = area > 0 ? 1 : -1;
+        const ring = (j) => {
+          const t = (j / N) * 2 * Math.PI;
+          return [0, 1, 2].map((k) => u[k] * Math.cos(t) + v[k] * Math.sin(t));
+        };
+        const base = prof.map(([sv, r]) => add(Array.from({ length: N }, (_, j) => [0, 1, 2].map((k) => o[k] + a[k] * sv + ring(j)[k] * r))));
+        for (let i = 0; i < prof.length; i++) {
+          const q = (i + 1) % prof.length;
+          if (prof[i][1] <= 0 && prof[q][1] <= 0) continue;
+          const ds = prof[q][0] - prof[i][0];
+          const dr = prof[q][1] - prof[i][1];
+          for (let j = 0; j < N; j++) {
+            const e = ring(j + 0.5);
+            face([base[i] + j, base[i] + ((j + 1) % N), base[q] + ((j + 1) % N), base[q] + j], [0, 1, 2].map((k) => ccw * (a[k] * dr - e[k] * ds)), p, shape);
+          }
+        }
+      } else if (sh.k === "s") {
+        const [la, lo] = [10, 18];
+        const at = (i, j) => {
+          const th = (i / la) * Math.PI;
+          const ph = (j / lo) * 2 * Math.PI;
+          return [Math.sin(th) * Math.cos(ph), Math.sin(th) * Math.sin(ph), Math.cos(th)];
+        };
+        const b = add(Array.from({ length: (la + 1) * lo }, (_, k) => at(Math.floor(k / lo), k % lo).map((x, m) => sh.o[m] + x * sh.r)));
+        for (let i = 0; i < la; i++)
+          for (let j = 0; j < lo; j++) face([b + i * lo + j, b + i * lo + ((j + 1) % lo), b + (i + 1) * lo + ((j + 1) % lo), b + (i + 1) * lo + j], at(i + 0.5, j + 0.5), p, shape);
+      } else if (sh.k === "t") {
+        const N = 10;
+        const pts = sh.points;
+        let ref = null;
+        const rings = pts.map((pt, i) => {
+          const t = norm3([0, 1, 2].map((k) => pts[Math.min(i + 1, pts.length - 1)][k] - pts[Math.max(i - 1, 0)][k]));
+          const seed = ref && Math.abs(ref[0] * t[0] + ref[1] * t[1] + ref[2] * t[2]) < 0.99 ? ref : Math.abs(t[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+          const d = seed[0] * t[0] + seed[1] * t[1] + seed[2] * t[2];
+          const e1 = norm3([0, 1, 2].map((k) => seed[k] - d * t[k]));
+          const e2 = [t[1] * e1[2] - t[2] * e1[1], t[2] * e1[0] - t[0] * e1[2], t[0] * e1[1] - t[1] * e1[0]];
+          ref = e1;
+          const dirs = Array.from({ length: N }, (_, j) => {
+            const c = Math.cos((j / N) * 2 * Math.PI);
+            const s2 = Math.sin((j / N) * 2 * Math.PI);
+            return [0, 1, 2].map((k) => e1[k] * c + e2[k] * s2);
+          });
+          return { start: add(dirs.map((dv) => [0, 1, 2].map((k) => pt[k] + dv[k] * sh.radii[i]))), dirs, t };
+        });
+        for (let i = 0; i + 1 < rings.length; i++)
+          for (let j = 0; j < N; j++) {
+            const jj = (j + 1) % N;
+            face([rings[i].start + j, rings[i].start + jj, rings[i + 1].start + jj, rings[i + 1].start + j], [0, 1, 2].map((k) => rings[i].dirs[j][k] + rings[i].dirs[jj][k] + rings[i + 1].dirs[j][k] + rings[i + 1].dirs[jj][k]), p, shape, true);
+          }
+        const first = rings[0];
+        const last = rings[rings.length - 1];
+        face(Array.from({ length: N }, (_, j) => first.start + j), first.t.map((x) => -x), p, shape, true);
+        face(Array.from({ length: N }, (_, j) => last.start + j), last.t, p, shape, true);
+        faces[faces.length - 1].cap = faces[faces.length - 2].cap = true;
+      }
+    });
+    for (const decal of part.decals)
+      for (const loop of decal.loops) faces.push({ idx: Array.from({ length: loop.length }, (_, i) => add([loop[i]])), n: decal.n, part: p, decal: true });
+  });
+  // neighbours across each edge, within a shape, for silhouettes and creases
+  const owner = new Map();
+  faces.forEach((f, fi) => {
+    if (f.decal) return;
+    f.edges = f.idx.map((a, i) => {
+      const b = f.idx[(i + 1) % f.idx.length];
+      const key = `${f.shape}:${Math.min(a, b)}:${Math.max(a, b)}`;
+      const list = owner.get(key) || [];
+      list.push(fi);
+      owner.set(key, list);
+      return key;
+    });
+  });
+  for (const f of faces) if (f.edges) f.next = f.edges.map((key) => owner.get(key).find((g) => faces[g] !== f) ?? -1);
+  const xs = verts.map((v) => v[0]);
+  const ys = verts.map((v) => v[1]);
+  const zs = verts.map((v) => v[2]);
+  const c = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2, (Math.min(...zs) + Math.max(...zs)) / 2];
+  const R = Math.max(...verts.map((v) => Math.hypot(v[0] - c[0], v[1] - c[1])));
+  return { verts, faces, parts, c, R, zh: (Math.max(...zs) - Math.min(...zs)) / 2 };
+}
+const pieceBox = {
+  view: root.querySelector("[data-piece-view]"),
+  canvas: root.querySelector("[data-piece-canvas]"),
+  box: root.querySelector("[data-info-box]"),
+  bolt: root.querySelector("[data-circuit]"),
+};
+const turner = { mesh: null, id: null, angle: 0, frame: 0, onScreen: true, zoom: { z: 1, x: 0, y: 0 }, cache: new Map(), colours: null };
+function coloursOf() {
+  const css = getComputedStyle(root);
+  const v = (name) => css.getPropertyValue(name).trim();
+  return { fill: [v("--anatomy-shade-0"), v("--anatomy-shade-1"), v("--anatomy-shade-2"), v("--anatomy-shade-3"), v("--anatomy-top") || "#fff"], line: { hi: v("--anatomy-hi"), mid: v("--anatomy-mid"), lo: v("--anatomy-lo"), faint: v("--anatomy-faint") } };
+}
+function drawPiece() {
+  const { canvas } = pieceBox;
+  const mesh = turner.mesh;
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+  }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!mesh || !w) return;
+  turner.colours ??= coloursOf();
+  const { sinA, cosA, sinE, cosE, V, L } = CAM;
+  const k = Math.min((w / 2 - 22) / mesh.R, (h / 2 - 22) / (mesh.R * sinE + mesh.zh * cosE));
+  const { z, x: zx, y: zy } = turner.zoom;
+  ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * (zx + (w / 2) * z), dpr * (zy + (h / 2) * z));
+  const ca = Math.cos(turner.angle);
+  const sa = Math.sin(turner.angle);
+  const [cx, cy, cz] = mesh.c;
+  const n = mesh.verts.length;
+  const X = new Float32Array(n);
+  const Y = new Float32Array(n);
+  const Dp = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const [vx, vy, vz] = mesh.verts[i];
+    const rx = (vx - cx) * ca - (vy - cy) * sa;
+    const ry = (vx - cx) * sa + (vy - cy) * ca;
+    const rz = vz - cz;
+    X[i] = (rx * sinA - ry * cosA) * k;
+    Y[i] = ((rx * cosA + ry * sinA) * sinE - rz * cosE) * k;
+    Dp[i] = (rx * cosA + ry * sinA) * cosE + rz * sinE;
+  }
+  const turned = (nv) => [nv[0] * ca - nv[1] * sa, nv[0] * sa + nv[1] * ca, nv[2]];
+  const facing = mesh.faces.map((f) => {
+    const t = turned(f.n);
+    return { t, front: t[0] * V[0] + t[1] * V[1] + t[2] * V[2] > 1e-4 };
+  });
+  const order = [];
+  mesh.faces.forEach((f, fi) => {
+    if (!facing[fi].front) return;
+    let d = 0;
+    for (const i of f.idx) d += Dp[i];
+    order.push([d / f.idx.length + (f.decal ? 0.05 : 0), fi]);
+  });
+  order.sort((a, b) => a[0] - b[0]);
+  const { fill, line } = turner.colours;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  for (const [, fi] of order) {
+    const f = mesh.faces[fi];
+    const part = mesh.parts[f.part];
+    const path = new Path2D();
+    f.idx.forEach((i, m) => (m ? path.lineTo(X[i], Y[i]) : path.moveTo(X[i], Y[i])));
+    if (f.decal) {
+      path.closePath();
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 0.7 / z;
+      ctx.strokeStyle = line.lo;
+      ctx.stroke(path);
+      continue;
+    }
+    path.closePath();
+    const t = facing[fi].t;
+    const score = t[0] * L[0] + t[1] * L[1] + t[2] * L[2];
+    let band = 0;
+    while (band < BAND.length && score >= BAND[band]) band++;
+    ctx.globalAlpha = part.glass ? 0.5 : 1;
+    ctx.fillStyle = fill[Math.min(band, 4)];
+    ctx.strokeStyle = fill[Math.min(band, 4)];
+    ctx.lineWidth = 0.6 / z;
+    ctx.fill(path);
+    ctx.stroke(path);
+    ctx.globalAlpha = 1;
+    const edges = new Path2D();
+    let any = false;
+    f.idx.forEach((a, m) => {
+      const g = f.next[m];
+      const away = g < 0 || !facing[g].front;
+      const draw = f.soft ? away && g >= 0 && !mesh.faces[g].cap : away || facing[g].t[0] * t[0] + facing[g].t[1] * t[1] + facing[g].t[2] * t[2] < CREASE;
+      if (!draw) return;
+      const b = f.idx[(m + 1) % f.idx.length];
+      edges.moveTo(X[a], Y[a]);
+      edges.lineTo(X[b], Y[b]);
+      any = true;
+    });
+    if (any) {
+      ctx.lineWidth = 0.9 / z;
+      ctx.strokeStyle = line[part.tone] || line.mid;
+      ctx.stroke(edges);
+    }
+  }
+}
+function spinPiece() {
+  cancelAnimationFrame(turner.frame);
+  turner.frame = 0;
+  const live = turner.mesh && pieceBox.box.hasAttribute("data-show") && !pieceBox.box.hasAttribute("data-circuit") && turner.onScreen;
+  if (!live) return;
+  if (still.matches) return drawPiece();
+  let last = performance.now();
+  const step = (time) => {
+    turner.angle += (Math.min(0.05, (time - last) / 1000) * 2 * Math.PI) / TURN_S;
+    last = time;
+    drawPiece();
+    turner.frame = requestAnimationFrame(step);
+  };
+  turner.frame = requestAnimationFrame(step);
+}
+function showPiece(id) {
+  if (!pieceBox.view) return;
+  if (id !== null && String(id) !== turner.id) {
+    turner.id = String(id);
+    if (!turner.cache.has(turner.id)) turner.cache.set(turner.id, meshOf(D.shapes[turner.id]));
+    turner.mesh = turner.cache.get(turner.id);
+    turner.angle = 0;
+  }
+  drawPiece();
+  spinPiece();
+}
+if (pieceBox.view) {
+  zoomable(pieceBox.view, pieceBox.canvas, pieceBox.view, (zoom) => {
+    turner.zoom = zoom;
+    if (still.matches || !turner.frame) drawPiece();
+  });
+  new ResizeObserver(() => drawPiece()).observe(pieceBox.view);
+  new IntersectionObserver((entries) => {
+    turner.onScreen = entries[entries.length - 1].isIntersecting;
+    spinPiece();
+  }).observe(pieceBox.view);
+  pieceBox.bolt.addEventListener("click", () => {
+    const on = !pieceBox.box.hasAttribute("data-circuit");
+    pieceBox.box.toggleAttribute("data-circuit", on);
+    pieceBox.bolt.setAttribute("aria-pressed", String(on));
+    pieceBox.bolt.setAttribute("aria-label", on ? "Show the pieces again" : "Show the circuit");
+    spinPiece();
+  });
+}
+
+// v3: the parts list and the manual fold open and shut with their height eased, not snapped
+for (const fold of root.querySelectorAll(".um-fold")) {
+  const head = fold.querySelector("summary");
+  const body = fold.querySelector(".um-fold-body");
+  let motion = null;
+  head.addEventListener("click", (event) => {
+    if (still.matches || !body.animate) return;
+    event.preventDefault();
+    const opening = !fold.open || fold.hasAttribute("data-shut");
+    // a closed <details> still reports its content's height in some browsers; from shut, start at 0
+    const from = fold.open ? body.getBoundingClientRect().height : 0;
+    if (motion) motion.cancel();
+    if (opening) {
+      fold.open = true;
+      fold.removeAttribute("data-shut");
+    } else fold.setAttribute("data-shut", "");
+    const to = opening ? body.scrollHeight : 0;
+    motion = body.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: 420, easing: "cubic-bezier(.32,.72,0,1)" });
+    motion.onfinish = () => {
+      motion = null;
+      if (!opening) {
+        fold.open = false;
+        fold.removeAttribute("data-shut");
+      }
+    };
+  });
+}
+
 if (D.v3 && STEPS.length > 1) {
   for (const group of springs) for (const one of Object.values(group)) Object.assign(one, { x: 1, v: 0, target: 1, pending: null });
   goals.fill(1);
@@ -923,11 +1270,13 @@ stage.setAttribute("data-ready", "");
 // its normal size. Its box clips it, and a thin mask fades it out before the edge. The main figure and the piece view
 // each get one.
 const ZOOM_MAX = 2.6;
-function zoomable(view, content, host) {
+// paint(zoom), when given, redraws the content itself (a canvas) instead of scaling it with a CSS transform
+function zoomable(view, content, host, paint = null) {
   const zoom = { z: 1, x: 0, y: 0, frame: 0, wheel: 0, pinch: null, base: 1 };
   const apply = () => {
     const { z, x, y } = zoom;
-    content.style.transform = z === 1 && !x && !y ? "" : `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) scale(${z.toFixed(4)})`;
+    if (paint) paint(zoom);
+    else content.style.transform = z === 1 && !x && !y ? "" : `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) scale(${z.toFixed(4)})`;
     host.toggleAttribute("data-zoomed", z > 1.01);
   };
   const clampPan = () => {
@@ -1042,113 +1391,6 @@ function zoomable(view, content, host) {
 const viewBox = stage.querySelector(".um-view");
 const zoom = viewBox ? zoomable(viewBox, svg, stage) : null;
 
-// v3 panel: two tabs, the circuit and the piece view. The piece view shows the last part the reader pointed at (a
-// number, or a line of the parts list), drawn alone at azimuths 36°-64° and swinging slowly between them. Its frames
-// load from pieces/<id>.json the first time that part is shown.
-const tabs = [...root.querySelectorAll("[data-tab]")];
-const pane = {
-  view: root.querySelector(".um-pview"),
-  svg: root.querySelector(".um-psvg"),
-  frames: root.querySelector("[data-frames]"),
-  empty: root.querySelector("[data-pempty]"),
-  cap: root.querySelector("[data-pcap]"),
-  num: root.querySelector("[data-pnum]"),
-  name: root.querySelector("[data-pname]"),
-};
-const pieceView = {
-  open: false,
-  onScreen: false,
-  want: null,
-  shown: null,
-  groups: [],
-  index: -1,
-  frame: 0,
-  clock: 0,
-  wait: 0,
-  cache: new Map(),
-};
-const SWING_S = 9;
-function setTab(name) {
-  for (const tab of tabs) {
-    const on = tab.dataset.tab === name;
-    tab.setAttribute("aria-selected", String(on));
-    tab.tabIndex = on ? 0 : -1;
-    root.querySelector(`#${tab.getAttribute("aria-controls")}`).hidden = !on;
-  }
-  pieceView.open = name === "piece";
-  showPiece();
-}
-function loadPiece(id) {
-  if (!pieceView.cache.has(id))
-    pieceView.cache.set(
-      id,
-      fetch(`pieces/${id}.json`)
-        .then((response) => response.json())
-        .catch(() => null),
-    );
-  return pieceView.cache.get(id);
-}
-// select() calls this; the view follows the pointer a beat late, so sweeping across the numbers loads only the last
-function pointPiece(id) {
-  if (id === null || id === undefined) return;
-  pieceView.want = String(id);
-  clearTimeout(pieceView.wait);
-  pieceView.wait = setTimeout(showPiece, 140);
-}
-async function showPiece() {
-  if (!pane.view || !pieceView.open) return turnPiece();
-  const id = pieceView.want;
-  pane.empty.hidden = id !== null;
-  pane.cap.hidden = id === null;
-  if (id === null || id === pieceView.shown) return turnPiece();
-  const call = D.calls.find((c) => String(c.id) === id);
-  pane.num.textContent = call.id;
-  pane.name.textContent = call.name;
-  const data = await loadPiece(id);
-  if (!data || pieceView.want !== id) return;
-  pieceView.shown = id;
-  pane.svg.setAttribute("viewBox", data.view.join(" "));
-  pane.frames.innerHTML = data.frames.map((frame) => frame.replace("<g ", '<g style="display:none" ')).join("");
-  pieceView.groups = [...pane.frames.children];
-  pieceView.index = -1;
-  turnPiece();
-}
-function turnPiece() {
-  cancelAnimationFrame(pieceView.frame);
-  pieceView.frame = 0;
-  if (!pieceView.groups.length) return;
-  const mid = (pieceView.groups.length - 1) / 2;
-  const show = (index) => {
-    if (index === pieceView.index) return;
-    if (pieceView.index >= 0) pieceView.groups[pieceView.index].style.display = "none";
-    pieceView.groups[index].style.display = "";
-    pieceView.index = index;
-  };
-  if (still.matches || !pieceView.open || !pieceView.onScreen) return show(Math.round(mid));
-  let last = performance.now();
-  const step = (time) => {
-    pieceView.clock += Math.min(0.05, (time - last) / 1000);
-    last = time;
-    show(Math.round(mid + mid * Math.sin((pieceView.clock / SWING_S) * 2 * Math.PI)));
-    pieceView.frame = requestAnimationFrame(step);
-  };
-  pieceView.frame = requestAnimationFrame(step);
-}
-if (pane.view) {
-  zoomable(pane.view, pane.svg, pane.view);
-  tabs.forEach((tab) => tab.addEventListener("click", () => setTab(tab.dataset.tab)));
-  root.querySelector(".um-tabs").addEventListener("keydown", (event) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    const next = tabs[(tabs.findIndex((tab) => tab.getAttribute("aria-selected") === "true") + 1) % tabs.length];
-    setTab(next.dataset.tab);
-    next.focus();
-  });
-  new IntersectionObserver((entries) => {
-    pieceView.onScreen = entries[entries.length - 1].isIntersecting;
-    turnPiece();
-  }).observe(pane.view);
-}
-
 // probe(world, piece, rides): the callout ids of the part painted on top at a world point (glass skipped), for checks.
 const probe = (world, id, rides = null) => {
   const [x, y] = screenOf(world, id, camView(), rides);
@@ -1157,4 +1399,11 @@ const probe = (world, id, rides = null) => {
   const top = hits.find((it) => !it.querySelector(".um-glass"));
   return top ? top.dataset.c || `-${top.dataset.i}` : "";
 };
-window.__um = { st, piece, springs, flip, setApart, setStep, nextStep, select, idle, assembled, setAuto, setCalls, calls, probe, zoom, prove: proveOf };
+// pieceAt(degrees): stop the piece view's turn and draw it at that angle, for stills
+const pieceAt = (degrees) => {
+  cancelAnimationFrame(turner.frame);
+  turner.frame = 0;
+  turner.angle = (degrees * Math.PI) / 180;
+  drawPiece();
+};
+window.__um = { st, piece, springs, flip, setApart, setStep, nextStep, select, idle, assembled, setAuto, setCalls, calls, probe, zoom, prove: proveOf, pieceAt };

@@ -1,0 +1,11 @@
+[["wait", 400], ["until", "window.__um && window.__um.assembled() && window.__um.idle()", 15000],
+ ["shot", "shots/v3/b-empty.png", ".um-info", 1],
+ ["move", ".um-call[data-c='4'] .um-badge", 0.5, 0.5], ["wait", 800],
+ ["eval", "(() => { const c = document.querySelector('[data-piece-canvas]'); return 'canvas ' + c.width + 'x' + c.height + ', info shown ' + document.querySelector('.um-info').hasAttribute('data-show'); })()"],
+ ["eval", "(async () => { const t = []; let last = performance.now(); for (let i = 0; i < 60; i++) { await new Promise(requestAnimationFrame); const n = performance.now(); t.push(n - last); last = n; } t.sort((a, b) => a - b); return 'frame interval median ' + t[30].toFixed(1) + ' ms, worst ' + t[59].toFixed(1) + ' ms'; })()"],
+ ["shot", "shots/v3/b-gears.png", ".um-info", 1],
+ ["move", ".um-foot", 0.5, 0.5], ["wait", 700],
+ ["eval", "'after leaving: shown ' + document.querySelector('.um-info').hasAttribute('data-show')"],
+ ["click", "[data-circuit]"], ["wait", 600], ["shot", "shots/v3/b-circuit.png", ".um-info", 1],
+ ["click", "[data-circuit]"], ["wait", 500],
+ ["click", ".um-partsfold > summary"], ["wait", 120], ["eval", "'mid-fold height ' + Math.round(document.querySelector('.um-partsfold .um-fold-body').getBoundingClientRect().height)"], ["wait", 600], ["eval", "'folded: ' + !document.querySelector('.um-partsfold').open"]]

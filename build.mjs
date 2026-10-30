@@ -12,7 +12,7 @@ const A = await load("kit/audit.mjs");
 const { tubePieces, tubeSvg } = await load("kit/tube.mjs");
 const { kitScript } = await load("scripts/inline-kit.mjs");
 const { M } = await import("./model.mjs");
-const { plateOf, plateParts, partSvg, partDs, onPlate, ringOnPlate, roundPoly, circlePoly, turnPoint, rectPoly } = await import("./plate.mjs");
+const { plateOf, plateParts, partSvg, partDs, onPlate, ringOnPlate, roundPoly, circlePoly, turnPoint, rectPoly, gearPoly } = await import("./plate.mjs");
 const { dynamicParts } = await import("./draw.mjs");
 const { DOOR, DOOR_RING, HINGE, roundEach, diagX } = await import("./door.mjs");
 const { doorPart, doorSvgOf, DOOR_LEAF } = await import("./draw2.mjs");
@@ -45,14 +45,7 @@ const STAGGER = ["lid", "mech", "battery", "base"];
 const SPRING = { stagger: 0.035, stiffness: 64, damping: 14.2, substeps: 4 };
 
 const ASSEMBLED = [...k.boxCorners(BOX, -3, 63), [M.LEVER.x, 14.5, 85], [M.LEVER.x, 14.5, 85]];
-// --frame-az=N redraws every part with the camera turned to azimuth N (same scale and origin) and prints the parts'
-// markup; the v3 piece view plays these frames to turn one piece at a time.
-const FRAME_AZ = (() => {
-  const flag = process.argv.find((arg) => arg.startsWith("--frame-az="));
-  return flag ? Number(flag.split("=")[1]) : null;
-})();
-const P0 = k.fitProjection(ASSEMBLED, W, H, { pad: 96, azimuth: CAM_AZ, elevation: CAM_EL });
-const P = FRAME_AZ === null ? P0 : { ...P0, azimuth: FRAME_AZ };
+const P = k.fitProjection(ASSEMBLED, W, H, { pad: 96, azimuth: CAM_AZ, elevation: CAM_EL });
 const V = G.viewOf(P);
 const at = (point) => k.iso(point, P);
 
@@ -455,12 +448,6 @@ lidBackItems();
 mechFrontItems();
 lidFrontItems();
 if (V2) wiresV2();
-const CREATED = [...R.items];
-if (FRAME_AZ !== null) {
-  // a pipe takes the write asynchronously; exit only once it is flushed
-  await new Promise((done) => process.stdout.write(JSON.stringify(CREATED.map((item) => item.svg)), done));
-  process.exit(0);
-}
 
 // The mounting foot is a 97 × 20 × 3 plate that the audit's slender rule reads as a rod of radius 10, so any lead that
 // runs on it or rises off it near the headers "lands on its outline"; the leads cross it as a floor, not as a line.
@@ -666,50 +653,48 @@ if (V3) {
 }
 for (const item of R.items) item.calls = CALLS.filter((call) => call.match.test(item.name)).map((call) => call.id);
 
-// v3 piece view: each callout's parts drawn alone at azimuths PIECE_TURN.from..to, centred on the piece, in the main
-// figure's settled order (valid this close to it). Written to pieces/<id>.json; --pieces redraws them.
-const PIECE_TURN = { from: CAM_AZ - 14, to: CAM_AZ + 14, step: 2 };
-if (V3 && (process.argv.includes("--pieces") || !existsSync(join(HERE, "pieces")))) await writePieces();
-async function writePieces() {
-  const { execFile } = await import("node:child_process");
-  const { mkdirSync } = await import("node:fs");
-  const azimuths = [];
-  for (let a = PIECE_TURN.from; a <= PIECE_TURN.to + 1e-9; a += PIECE_TURN.step) azimuths.push(a);
-  const drawAt = (a) =>
-    new Promise((done, fail) =>
-      execFile(process.execPath, [fileURLToPath(import.meta.url), "--v3", `--frame-az=${a}`], { maxBuffer: 64 << 20 }, (error, out) => (error ? fail(error) : done(JSON.parse(out)))),
-    );
-  const drawn = [];
-  for (let i = 0; i < azimuths.length; i += 4) drawn.push(...(await Promise.all(azimuths.slice(i, i + 4).map(drawAt))));
-  mkdirSync(join(HERE, "pieces"), { recursive: true });
-  for (const call of CALLS) {
-    const items = R.items.filter((item) => item.calls.includes(call.id)).sort((a, b) => a.key - b.key);
-    const corners = items.flatMap((item) =>
-      item.shapes.flatMap((shape) => {
-        const b = A.boundsOf(shape);
-        return [b.min[0], b.max[0]].flatMap((x) => [b.min[1], b.max[1]].flatMap((y) => [b.min[2], b.max[2]].map((z) => [x, y, z])));
-      }),
-    );
-    const centre = [0, 1, 2].map((axis) => (Math.min(...corners.map((c) => c[axis])) + Math.max(...corners.map((c) => c[axis]))) / 2);
-    const box = [Infinity, Infinity, -Infinity, -Infinity];
-    const frames = azimuths.map((a, f) => {
-      const Pa = { ...P0, azimuth: a };
-      const [cx, cy] = k.iso(centre, Pa);
-      for (const corner of corners) {
-        const [x, y] = k.iso(corner, Pa);
-        box[0] = Math.min(box[0], x - cx);
-        box[1] = Math.min(box[1], y - cy);
-        box[2] = Math.max(box[2], x - cx);
-        box[3] = Math.max(box[3], y - cy);
-      }
-      const markup = items.map((item) => `<g>${drawn[f][CREATED.indexOf(item)].replace(/ data-dyn="[^"]*"/g, "")}</g>`).join("");
-      return `<g transform="translate(${(-cx).toFixed(1)} ${(-cy).toFixed(1)})">${markup}</g>`;
-    });
-    const pad = 6;
-    const view = [box[0] - pad, box[1] - pad, box[2] - box[0] + pad * 2, box[3] - box[1] + pad * 2].map((v) => +v.toFixed(1));
-    writeFileSync(join(HERE, "pieces", `${call.id}.json`), JSON.stringify({ id: call.id, name: call.name, view, frames }));
+// v3 piece view: each callout's parts as true 3D shapes, for the page to mesh and turn. They are the shapes recorded
+// for the audit, except where the audit records less than is drawn: the gears get their real tooth outlines and
+// their holes, and the hinge's springs get their coils.
+const round2 = (value) => (Array.isArray(value) ? value.map(round2) : typeof value === "number" ? Math.round(value * 100) / 100 : value);
+const frameOf = (F) => round2([F.o, F.a, F.u, F.v]);
+const toneOf = (svg) => (svg.match(/iso-edge" data-tone="(\w+)"/) || svg.match(/data-tone="(\w+)"/) || [0, "mid"])[1];
+function shapeOut(shape) {
+  if (shape.kind === "prism") return { k: "p", F: frameOf(shape.F), poly: round2(shape.poly), s: round2([shape.s0, shape.s1]) };
+  if (shape.kind === "body") return { k: "b", F: frameOf(shape.F), poly: round2(shape.poly) };
+  if (shape.kind === "ball") return { k: "s", o: round2(shape.o), r: round2(shape.r) };
+  if (shape.kind === "tube") return { k: "t", points: round2(shape.points), radii: round2(shape.radii) };
+  return null;
+}
+function gearShapes(name) {
+  const spec = M.GEAR[name];
+  const [cx, cz] = M.CENTRE[name === "second" ? "stage" : name];
+  const layer = name === "pinion" || name === "stage" ? M.Y.g1 : M.Y.g2;
+  const F = [[cx, 0, cz], [0, 1, 0], [1, 0, 0], [0, 0, 1]];
+  const loop = (x, z, r, n) => Array.from({ length: n }, (_, i) => [x + r * Math.cos((i / n) * 2 * Math.PI), layer[1], z + r * Math.sin((i / n) * 2 * Math.PI)]);
+  const decals = spec.teeth === 24 ? [loop(cx, cz, 2.4, 16), ...Array.from({ length: 6 }, (_, i) => loop(cx + 8.4 * Math.cos((i / 6) * 2 * Math.PI), cz + 8.4 * Math.sin((i / 6) * 2 * Math.PI), 2.8, 14))] : [loop(cx, cz, 1.4, 12)];
+  return { shapes: [{ k: "p", F, poly: round2(gearPoly(spec.teeth, M.GEAR.module, spec.phase)), s: round2(layer) }], decals: [{ n: [0, 1, 0], loops: round2(decals) }] };
+}
+function coilShape(spring) {
+  const points = [];
+  const steps = Math.round(HINGE.turns * 20);
+  for (let i = 0; i <= steps; i++) {
+    const t = (i / steps) * HINGE.turns * 2 * Math.PI;
+    points.push([spring.x[0] + ((spring.x[1] - spring.x[0]) * i) / steps, DOOR.hy + HINGE.coilR * Math.cos(t), DOOR.hz + HINGE.coilR * Math.sin(t)]);
   }
-  console.log("wrote pieces for", CALLS.length, "callouts at", azimuths.length, "azimuths");
+  return { k: "t", points: round2(points), radii: points.map(() => 0.16) };
+}
+function pieceShapes(call) {
+  return R.items
+    .filter((item) => item.calls.includes(call.id))
+    .map((item) => {
+      const gear = /^mech\.gear\.(\w+)$/.exec(item.name);
+      const spring = /^lid\.spring(\d)$/.exec(item.name);
+      const own = gear ? gearShapes(gear[1]) : { shapes: item.shapes.map(shapeOut).filter(Boolean), decals: [] };
+      if (spring) own.shapes.push(coilShape(HINGE.springs[Number(spring[1])]));
+      return { tone: toneOf(item.svg), glass: item.svg.includes("um-glass"), ...own };
+    })
+    .filter((part) => part.shapes.length);
 }
 
 const groups = R.items.map((item, index) => {
@@ -772,6 +757,7 @@ const DATA = {
   v3: V3,
   base: V3 ? fitOf(0) : null,
   counter: V3 ? { url: COUNTER, site: "https://franbrizuelab.github.io" } : null,
+  shapes: V3 ? Object.fromEntries(CALLS.map((call) => [call.id, pieceShapes(call)])) : null,
   door: V2 ? DOOR_TABLE : null,
   stages: V2 ? STAGES.map((stage, s) => ({ id: stage.id, name: stage.name, order: stage.order, rides: stage.rides, fit: fitOf(s + 1) })) : null,
 };
@@ -808,7 +794,7 @@ const GEAR = (() => {
 const flipIcon = `<button type="button" class="um-act" data-flip aria-label="Flip the switch"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${HAND}"/></svg></button>`;
 const settings = `<div class="um-settings"><nav class="um-ver" id="um-ver" aria-label="Version">${[1, 2, 3].map((ver) => `<a href="${pageName(ver)}"${ver === VER ? ' aria-current="page"' : ""}>v${ver}</a>`).join("")}</nav><button type="button" class="um-act um-gear" data-settings aria-expanded="false" aria-controls="um-ver" aria-label="Settings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${GEAR}"/><circle cx="8" cy="8" r="2.2"/></svg></button></div>`;
 const controls = V3
-  ? `<div class="um-controls">${flipIcon}${stepButtons}${settings}</div><div class="um-info" aria-hidden="true"><p class="um-info-empty" data-info-empty>Hover over a number to see information about the piece.</p><div class="um-info-card" data-info-card><span class="um-info-num" data-info-num></span><span class="um-info-name" data-info-name></span><span class="um-info-say" data-info-say></span></div></div>`
+  ? `<div class="um-controls">${flipIcon}${stepButtons}${settings}</div><div class="um-info" data-info-box><div class="um-info-text" aria-hidden="true"><p class="um-info-empty" data-info-empty>Hover over a number to see the piece and what it does.</p><div class="um-info-card" data-info-card><span class="um-info-num" data-info-num></span><span class="um-info-name" data-info-name></span><span class="um-info-say" data-info-say></span></div></div><div class="um-info-piece" data-piece-view><canvas class="um-pcanvas" data-piece-canvas role="img" aria-label="The part under the pointer, turning"></canvas></div><div class="um-info-circuit" data-circuit-pane aria-hidden="true">${circuit}</div><button type="button" class="um-bolt" data-circuit aria-pressed="false" aria-label="Show the circuit"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.3 1.6 4 9h3.6l-1 5.4L12 7H8.4z"/></svg></button></div>`
   : `<div class="um-controls">${flipButton}<button type="button" class="um-btn" data-apart>Take apart</button><span class="um-note" data-note aria-live="polite"></span>${versions}</div>`;
 const corners = V3
   ? `<div class="um-odo" data-odo hidden><b data-odo-n></b> flip<span data-odo-s>s</span> undone worldwide</div><button type="button" class="um-round um-auto" data-auto aria-pressed="false" aria-label="Run the machine on its own"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="um-play" d="M5.6 3.6v8.8L12.4 8z"/><path class="um-pause" d="M4.8 3.8h2.3v8.4H4.8zM8.9 3.8h2.3v8.4H8.9z"/></svg></button><button type="button" class="um-round um-infobtn" data-info aria-pressed="true" aria-label="Show the part numbers and their leader lines"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="4.4" r="1.15"/><path d="M6.4 7h2.4v5.2h1.2v1.1H6v-1.1h1.2V8.1h-.8z"/></svg></button>`
@@ -841,7 +827,7 @@ const REPO = "https://github.com/franbrizuelab/useless-machine";
 const GITHUB_MARK = "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z";
 // v3's sections under the figure fold open and shut; both start open
 const CHEVRON = `<svg class="um-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>`;
-const manual = `<details class="um-manual um-fold" open><summary class="um-manual-head"><h2>Owner's manual</h2><span>Model UM-3 · 4.5 V</span>${CHEVRON}</summary><dl class="um-manual-list">${MANUAL.map(([term, text]) => `<div><dt>${term}</dt><dd>${text}</dd></div>`).join("")}</dl><p class="um-manual-last">Last change · firmware v3.0.1: fixed a bug where the machine was briefly useful.</p></details>`;
+const manual = `<details class="um-manual um-fold" open><summary class="um-manual-head"><h2>Owner's manual</h2><span>Model UM-3 · 4.5 V</span>${CHEVRON}</summary><div class="um-fold-body"><dl class="um-manual-list">${MANUAL.map(([term, text]) => `<div><dt>${term}</dt><dd>${text}</dd></div>`).join("")}</dl><p class="um-manual-last">Last change · firmware v3.0.1: fixed a bug where the machine was briefly useful.</p></div></details>`;
 const footer = `<footer class="um-foot"><span>Useless machine · model UM-3</span><a class="um-git" href="${REPO}" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${GITHUB_MARK}"/></svg>GitHub</a></footer>`;
 const stageLabel = V3
   ? "Useless machine. Space or Enter flips the switch, E steps through the take-apart stages, the arrow keys step through the parts, Escape clears."
@@ -850,10 +836,8 @@ const stageLabel = V3
     : "Useless machine. Space or Enter flips the switch, E takes it apart, the arrow keys step through the parts, Escape clears.";
 let plate = k.plateHtml({ fig: "Fig 1", title: "Useless machine", hint: V3 ? "" : "Click the switch", readout: V3 ? "" : "ready", keys: [], caption: "", body: `<div class="iso-stage um-stage" tabindex="0" role="group" aria-label="${stageLabel}">${V3 ? `<div class="um-view">${svg}</div>` : svg}</div>${corners}` });
 if (V3) plate = plate.replace(/<span class="iso-plate-corner" data-corner="readout"[^>]*><\/span>/, "");
-// v3's panel has two tabs: the circuit, and the last part the reader pointed at, drawn alone and turning
-const panel = `<section class="um-panel"><div class="um-tabs" role="tablist" aria-label="Panel"><button type="button" role="tab" id="um-tab-circuit" aria-selected="true" aria-controls="um-pane-circuit" data-tab="circuit">Circuit</button><button type="button" role="tab" id="um-tab-piece" aria-selected="false" aria-controls="um-pane-piece" data-tab="piece" tabindex="-1">Piece</button></div><div class="um-pane" id="um-pane-circuit" role="tabpanel" aria-labelledby="um-tab-circuit">${circuit}</div><div class="um-pane" id="um-pane-piece" role="tabpanel" aria-labelledby="um-tab-piece" hidden><div class="um-pview"><svg class="um-psvg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" role="img" aria-label="The selected part, turning"><g data-frames></g></svg></div><p class="um-pempty" data-pempty>Hover over a number to see that piece here, on its own.</p><p class="um-pcap" data-pcap hidden><span class="um-info-num" data-pnum></span><span data-pname></span></p></div></section>`;
-const partsFold = `<details class="um-fold um-partsfold" open><summary><h2>Parts</h2><span>${CALLS.length}</span>${CHEVRON}</summary><ol class="um-parts">${parts}</ol></details>`;
-const below = V3 ? panel + partsFold + manual + footer : `<div class="um-below"><div class="um-circuit">${circuit}</div><ol class="um-parts">${parts}</ol></div><p class="iso-caption um-caption">${caption}</p>`;
+const partsFold = `<details class="um-fold um-partsfold" open><summary><h2>Parts</h2><span>${CALLS.length}</span>${CHEVRON}</summary><div class="um-fold-body"><ol class="um-parts">${parts}</ol></div></details>`;
+const below = V3 ? partsFold + manual + footer : `<div class="um-below"><div class="um-circuit">${circuit}</div><ol class="um-parts">${parts}</ol></div><p class="iso-caption um-caption">${caption}</p>`;
 const body = `<div class="um${V3 ? " um3" : ""}">${plate.replace("</div></figure>", `</div>${controls}</figure>`)}${below}</div>`;
 const SITE = "https://franbrizuelab.github.io/useless-machine/";
 const PREVIEW = {
