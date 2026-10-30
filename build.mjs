@@ -635,7 +635,8 @@ if (V3) {
     [11, { spine: [[[TOG.x + 6, TOG.y, 50], [TOG.x + 6, TOG.y, 59.4]], [[TOG.x + 4.25, TOG.y, Z_LID + LID_H + 0.3], [TOG.x + 4.25, TOG.y, Z_LID + LID_H + 2], [TOG.x + 3.3, TOG.y, Z_LID + LID_H + 2.4], [TOG.x + 3.3, TOG.y, Z_LID + LID_H + 4.6]]], anchor: [TOG.x + 4.25, TOG.y, Z_LID + LID_H + 1.1] }],
     [12, {}],
     ["hinge", null],
-    [14, { spine: [[[44, BOARD.y + BOARD.d, BOARD_Z[0] + 0.6], [44, HEADER_Y[1], PLUG_Z[1] - 0.4]]], anchor: [44, HEADER_Y[1], PLUG_Z[0]] }],
+    // the board and its header, not the plug in it (that is the harness's)
+    [14, { spine: [[[44, BOARD.y + BOARD.d, BOARD_Z[0] + 0.6], [44, HEADER_Y[1], HEADER_Z[1] - 0.4]]], anchor: [44, HEADER_Y[1], (HEADER_Z[0] + HEADER_Z[1]) / 2] }],
     [15, { piece: "battery", spine: [[[-45, 11, floor], [-45, PIN_Y - 3.5, floor], [-41.5, PIN_Y, floor], [6, PIN_Y, floor]]], anchor: [-45, 24, floor] }],
   ];
   const [hx0, hx1] = HINGE.springs[1].x;
