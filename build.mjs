@@ -767,17 +767,13 @@ const lifeDays = lifeUses / USE.perDay;
 const lifeYears = Math.floor(lifeDays / 365.25);
 const lifeMonths = Math.round((lifeDays / 365.25 - lifeYears) * 12);
 const brushUses = Math.round((USE.brushHours * 3600) / USE.motor / 10000) * 10000;
-// energy per use, and what it could have done instead: lift a 100 g apple, or heat water from 20 °C to boiling
 const joules = M.VOLTS * USE.amps * USE.motor;
-const appleMetres = joules / (0.1 * 9.81);
-const yearKJ = (joules * USE.perDay * 365) / 1000;
-const boilMl = (yearKJ * 1000) / (4.186 * 80);
 const fmt = (n) => n.toLocaleString("en-US");
 const MANUAL = [
   ["Operation", "Flip the switch. The machine flips it back. Repeat as often as you like: it will not get bored, but it will wear out (see Service life)."],
-  ["Efficiency", `Each use turns ${joules.toFixed(1)} J from the batteries (${M.VOLTS} V × ${USE.amps} A × ${USE.motor} s) into 0 J of useful work: an efficiency of 0.000%. That is enough to lift an apple ${appleMetres.toFixed(1)} m, spent on putting a switch back where it was. A year at ${USE.perDay} uses a day comes to ${Math.round(yearKJ)} kJ, all of it heat: enough to bring ${Math.round(boilMl)} ml of water to the boil.`],
+  ["Efficiency", `Each use turns ${joules.toFixed(1)} J from the batteries (${M.VOLTS} V × ${USE.amps} A × ${USE.motor} s) into 0 J of useful work: an efficiency of 0.000%.`],
   ["Lubrication", "Every 2,000 uses, a thin film of PTFE silicone grease on the gear teeth (some petroleum greases soften plastic gears) and one drop of sewing-machine oil on the door's hinge pin. The motor's bearings are sealed: leave them dry. No WD-40: it is a solvent, and it washes the grease out."],
-  ["Service life", `${fmt(lifeUses)} uses. The weak point is the toggle switch, rated for ${fmt(USE.toggle)} operations, and every use costs two: your flip and the arm's. At ${USE.perDay} uses a day that is about ${lifeYears} years and ${lifeMonths} months. The limit switch (${fmt(USE.limit)} operations) and the motor's brushes (about ${fmt(brushUses)} uses) will outlive it.`],
+  ["Service life", `${fmt(lifeUses)} uses. At ${USE.perDay} uses a day that is about ${lifeYears} years and ${lifeMonths} months. The limit switch (${fmt(USE.limit)} operations) and the motor's brushes (about ${fmt(brushUses)} uses) will outlive it.`],
   ["Troubleshooting", "Arm stops short of the lever: batteries below 1.1 V a cell. Arm reaches the lever but cannot flip it: NiMH cells, or grease on the lever. Door stays open: a torsion spring has slipped off its rivet. Arm comes out on its own: the play button in the corner is on."],
   ["Warranty", `12 months or ${fmt(lifeUses)} uses, whichever comes first. Void if the machine is used for anything useful.`],
 ];
