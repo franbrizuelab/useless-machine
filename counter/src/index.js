@@ -15,7 +15,7 @@ import { DurableObject } from "cloudflare:workers";
 //
 // It also keeps the messages visitors send from the page's footer. A message needs the same proof of work, and each
 // visitor may send MESSAGES_EACH in all (by a random id their browser keeps) and each address ADDRESS_PER_DAY a day
-// (stored only as a keyed hash). The owner reads and deletes them at /inbox/<INBOX_KEY>.
+// (stored only as a keyed hash). The owner reads and deletes them at /inbox/<INBOX_KEY>, and can reset every limit.
 //   POST /message    { name, message, visitor, challenge, sig, nonce } → { sent, left } or { error }
 const SITE = "https://franbrizuelab.github.io";
 const LOCAL = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
@@ -104,6 +104,10 @@ export class Inbox extends DurableObject {
   async remove(id) {
     this.ctx.storage.sql.exec("DELETE FROM messages WHERE id = ?", id);
   }
+  // the owner's reset: every visitor and every address may send again
+  async reset() {
+    this.ctx.storage.sql.exec("DELETE FROM senders");
+  }
 }
 
 // text from the form: normalised, control characters dropped (line breaks kept), counted in characters, not bytes
@@ -127,7 +131,7 @@ function inboxPage(messages, key) {
         `<article><header><b>${escapeHtml(m.name)}</b><time>${new Date(m.at).toISOString().replace("T", " ").slice(0, 16)} UTC</time><form method="post" action="/inbox/${key}/delete"><input type="hidden" name="id" value="${m.id}"><button>Delete</button></form></header><p>${escapeHtml(m.body)}</p></article>`,
     )
     .join("");
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Useless machine · inbox</title><style>body{margin:0;background:#f2f2ef;color:#18181a;font:15px/1.55 ui-sans-serif,system-ui,sans-serif}main{width:min(720px,100% - 32px);margin:40px auto}h1{font-size:18px;margin:0 0 18px}h1 span{color:#8c8c90;font:12px ui-monospace,monospace;letter-spacing:.06em;margin-left:8px}article{background:#fbfbfa;border-radius:12px;box-shadow:0 0 0 1px #c9c9d0;padding:14px 18px;margin:0 0 12px}article header{display:flex;align-items:baseline;gap:12px}time{color:#8c8c90;font:12px ui-monospace,monospace}form{margin-left:auto}button{border:1px solid #c9c9d0;border-radius:8px;background:#fff;padding:3px 10px;font:12px ui-monospace,monospace;cursor:pointer}p{margin:8px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}.none{color:#8c8c90}</style></head><body><main><h1>Messages<span>${messages.length}</span></h1>${rows || '<p class="none">No messages yet.</p>'}</main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Useless machine · inbox</title><style>body{margin:0;background:#f2f2ef;color:#18181a;font:15px/1.55 ui-sans-serif,system-ui,sans-serif}main{width:min(720px,100% - 32px);margin:40px auto}h1{display:flex;align-items:baseline;font-size:18px;margin:0 0 18px}h1 form{margin-left:auto}h1 span{color:#8c8c90;font:12px ui-monospace,monospace;letter-spacing:.06em;margin-left:8px}article{background:#fbfbfa;border-radius:12px;box-shadow:0 0 0 1px #c9c9d0;padding:14px 18px;margin:0 0 12px}article header{display:flex;align-items:baseline;gap:12px}time{color:#8c8c90;font:12px ui-monospace,monospace}form{margin-left:auto}button{border:1px solid #c9c9d0;border-radius:8px;background:#fff;padding:3px 10px;font:12px ui-monospace,monospace;cursor:pointer}p{margin:8px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}.none{color:#8c8c90}</style></head><body><main><h1>Messages<span>${messages.length}</span><form class="reset" method="post" action="/inbox/${key}/reset"><button title="Lets every visitor and every network send again">Reset send limits</button></form></h1>${rows || '<p class="none">No messages yet.</p>'}</main></body></html>`;
 }
 
 // the page on GitHub Pages, a local server, or a file opened from disk (Origin "null") may use it
@@ -182,11 +186,15 @@ export default {
       const result = await inbox.post(`visitor:${body.visitor}`, `address:${address}`, name, message);
       return json(result, result.sent ? 200 : 429);
     }
-    const box = /^\/inbox\/([^/]+)(\/delete)?$/.exec(pathname);
+    const box = /^\/inbox\/([^/]+)(\/delete|\/reset)?$/.exec(pathname);
     if (box && env.INBOX_KEY && sameText(box[1], env.INBOX_KEY)) {
       const inbox = env.INBOX.get(env.INBOX.idFromName("inbox"));
       const page = (status = 200) => inbox.list().then((list) => new Response(inboxPage(list, box[1]), { status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } }));
-      if (box[2] && request.method === "POST") {
+      if (box[2] === "/reset" && request.method === "POST") {
+        await inbox.reset();
+        return Response.redirect(new URL(`/inbox/${box[1]}`, request.url).href, 303);
+      }
+      if (box[2] === "/delete" && request.method === "POST") {
         const id = Number((await request.formData()).get("id"));
         if (Number.isInteger(id)) await inbox.remove(id);
         return Response.redirect(new URL(`/inbox/${box[1]}`, request.url).href, 303);
