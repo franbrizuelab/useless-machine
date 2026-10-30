@@ -45,7 +45,14 @@ const STAGGER = ["lid", "mech", "battery", "base"];
 const SPRING = { stagger: 0.035, stiffness: 64, damping: 14.2, substeps: 4 };
 
 const ASSEMBLED = [...k.boxCorners(BOX, -3, 63), [M.LEVER.x, 14.5, 85], [M.LEVER.x, 14.5, 85]];
-const P = k.fitProjection(ASSEMBLED, W, H, { pad: 96, azimuth: CAM_AZ, elevation: CAM_EL });
+// --frame-az=N redraws every part with the camera turned to azimuth N (same scale and origin) and prints the parts'
+// markup; the v3 piece view plays these frames to turn one piece at a time.
+const FRAME_AZ = (() => {
+  const flag = process.argv.find((arg) => arg.startsWith("--frame-az="));
+  return flag ? Number(flag.split("=")[1]) : null;
+})();
+const P0 = k.fitProjection(ASSEMBLED, W, H, { pad: 96, azimuth: CAM_AZ, elevation: CAM_EL });
+const P = FRAME_AZ === null ? P0 : { ...P0, azimuth: FRAME_AZ };
 const V = G.viewOf(P);
 const at = (point) => k.iso(point, P);
 
@@ -448,6 +455,12 @@ lidBackItems();
 mechFrontItems();
 lidFrontItems();
 if (V2) wiresV2();
+const CREATED = [...R.items];
+if (FRAME_AZ !== null) {
+  // a pipe takes the write asynchronously; exit only once it is flushed
+  await new Promise((done) => process.stdout.write(JSON.stringify(CREATED.map((item) => item.svg)), done));
+  process.exit(0);
+}
 
 // The mounting foot is a 97 × 20 × 3 plate that the audit's slender rule reads as a rod of radius 10, so any lead that
 // runs on it or rises off it near the headers "lands on its outline"; the leads cross it as a floor, not as a line.
@@ -624,7 +637,8 @@ if (V3) {
   const plan = [
     [2, { spine: [[[60, -39, 24], [60, -39, 56]]], anchor: [60, -39, 42], side: "R" }],
     // the tray front left of the limit switch, until step Y pulls the arm over it; then the tray's middle
-    [3, { spine: [[[-57, 8.75, 3.8], [-57, 8.75, 12.8]]], anchor: [-57, 8.75, 9], rides: undefined, later: { 1: { spine: [[[-20, 8.75, 4], [-20, 8.75, 9.6]]], anchor: [-20, 8.75, 6.8] } } }],
+    // the battery's plug sits on the wiring board, with the harnesses
+    [3, { match: /^battery\.(?!plug)/, spine: [[[-57, 8.75, 3.8], [-57, 8.75, 12.8]]], anchor: [-57, 8.75, 9], rides: undefined, later: { 1: { spine: [[[-20, 8.75, 4], [-20, 8.75, 9.6]]], anchor: [-20, 8.75, 6.8] } } }],
     [4, { spine: [[[MOTOR[0] + 6, -9, MOTOR[1] - 6.5], [MOTOR[0] + 6, -9, MOTOR[1] + 6.5]]], anchor: [MOTOR[0] + 6, -9, MOTOR[1]] }],
     [5, { spine: [[[33, M.Y.g1[1], 28], [33, M.Y.g1[1], 44]]], anchor: [33, M.Y.g1[1], 36] }],
     [6, { spine: [[[54, M.Y.plate[1], 8], [54, M.Y.plate[1], 44]]], anchor: [54, M.Y.plate[1], 20] }],
@@ -651,6 +665,52 @@ if (V3) {
   CALLS.splice(0, CALLS.length, ...next);
 }
 for (const item of R.items) item.calls = CALLS.filter((call) => call.match.test(item.name)).map((call) => call.id);
+
+// v3 piece view: each callout's parts drawn alone at azimuths PIECE_TURN.from..to, centred on the piece, in the main
+// figure's settled order (valid this close to it). Written to pieces/<id>.json; --pieces redraws them.
+const PIECE_TURN = { from: CAM_AZ - 14, to: CAM_AZ + 14, step: 2 };
+if (V3 && (process.argv.includes("--pieces") || !existsSync(join(HERE, "pieces")))) await writePieces();
+async function writePieces() {
+  const { execFile } = await import("node:child_process");
+  const { mkdirSync } = await import("node:fs");
+  const azimuths = [];
+  for (let a = PIECE_TURN.from; a <= PIECE_TURN.to + 1e-9; a += PIECE_TURN.step) azimuths.push(a);
+  const drawAt = (a) =>
+    new Promise((done, fail) =>
+      execFile(process.execPath, [fileURLToPath(import.meta.url), "--v3", `--frame-az=${a}`], { maxBuffer: 64 << 20 }, (error, out) => (error ? fail(error) : done(JSON.parse(out)))),
+    );
+  const drawn = [];
+  for (let i = 0; i < azimuths.length; i += 4) drawn.push(...(await Promise.all(azimuths.slice(i, i + 4).map(drawAt))));
+  mkdirSync(join(HERE, "pieces"), { recursive: true });
+  for (const call of CALLS) {
+    const items = R.items.filter((item) => item.calls.includes(call.id)).sort((a, b) => a.key - b.key);
+    const corners = items.flatMap((item) =>
+      item.shapes.flatMap((shape) => {
+        const b = A.boundsOf(shape);
+        return [b.min[0], b.max[0]].flatMap((x) => [b.min[1], b.max[1]].flatMap((y) => [b.min[2], b.max[2]].map((z) => [x, y, z])));
+      }),
+    );
+    const centre = [0, 1, 2].map((axis) => (Math.min(...corners.map((c) => c[axis])) + Math.max(...corners.map((c) => c[axis]))) / 2);
+    const box = [Infinity, Infinity, -Infinity, -Infinity];
+    const frames = azimuths.map((a, f) => {
+      const Pa = { ...P0, azimuth: a };
+      const [cx, cy] = k.iso(centre, Pa);
+      for (const corner of corners) {
+        const [x, y] = k.iso(corner, Pa);
+        box[0] = Math.min(box[0], x - cx);
+        box[1] = Math.min(box[1], y - cy);
+        box[2] = Math.max(box[2], x - cx);
+        box[3] = Math.max(box[3], y - cy);
+      }
+      const markup = items.map((item) => `<g>${drawn[f][CREATED.indexOf(item)].replace(/ data-dyn="[^"]*"/g, "")}</g>`).join("");
+      return `<g transform="translate(${(-cx).toFixed(1)} ${(-cy).toFixed(1)})">${markup}</g>`;
+    });
+    const pad = 6;
+    const view = [box[0] - pad, box[1] - pad, box[2] - box[0] + pad * 2, box[3] - box[1] + pad * 2].map((v) => +v.toFixed(1));
+    writeFileSync(join(HERE, "pieces", `${call.id}.json`), JSON.stringify({ id: call.id, name: call.name, view, frames }));
+  }
+  console.log("wrote pieces for", CALLS.length, "callouts at", azimuths.length, "azimuths");
+}
 
 const groups = R.items.map((item, index) => {
   const [mx, my, mz] = item.move;
@@ -767,23 +827,21 @@ const lifeDays = lifeUses / USE.perDay;
 const lifeYears = Math.floor(lifeDays / 365.25);
 const lifeMonths = Math.round((lifeDays / 365.25 - lifeYears) * 12);
 const brushUses = Math.round((USE.brushHours * 3600) / USE.motor / 10000) * 10000;
-// energy per use, and what it could have done instead: lift a 100 g apple, or heat water from 20 °C to boiling
 const joules = M.VOLTS * USE.amps * USE.motor;
-const appleMetres = joules / (0.1 * 9.81);
-const yearKJ = (joules * USE.perDay * 365) / 1000;
-const boilMl = (yearKJ * 1000) / (4.186 * 80);
 const fmt = (n) => n.toLocaleString("en-US");
 const MANUAL = [
   ["Operation", "Flip the switch. The machine flips it back. Repeat as often as you like: it will not get bored, but it will wear out (see Service life)."],
-  ["Efficiency", `Each use turns ${joules.toFixed(1)} J from the batteries (${M.VOLTS} V × ${USE.amps} A × ${USE.motor} s) into 0 J of useful work: an efficiency of 0.000%. That is enough to lift an apple ${appleMetres.toFixed(1)} m, spent on putting a switch back where it was. A year at ${USE.perDay} uses a day comes to ${Math.round(yearKJ)} kJ, all of it heat: enough to bring ${Math.round(boilMl)} ml of water to the boil.`],
+  ["Efficiency", `Each use turns ${joules.toFixed(1)} J from the batteries (${M.VOLTS} V × ${USE.amps} A × ${USE.motor} s) into 0 J of useful work: an efficiency of 0.000%.`],
   ["Lubrication", "Every 2,000 uses, a thin film of PTFE silicone grease on the gear teeth (some petroleum greases soften plastic gears) and one drop of sewing-machine oil on the door's hinge pin. The motor's bearings are sealed: leave them dry. No WD-40: it is a solvent, and it washes the grease out."],
-  ["Service life", `${fmt(lifeUses)} uses. The weak point is the toggle switch, rated for ${fmt(USE.toggle)} operations, and every use costs two: your flip and the arm's. At ${USE.perDay} uses a day that is about ${lifeYears} years and ${lifeMonths} months. The limit switch (${fmt(USE.limit)} operations) and the motor's brushes (about ${fmt(brushUses)} uses) will outlive it.`],
+  ["Service life", `${fmt(lifeUses)} uses. At ${USE.perDay} uses a day that is about ${lifeYears} years and ${lifeMonths} months. The limit switch (${fmt(USE.limit)} operations) and the motor's brushes (about ${fmt(brushUses)} uses) will outlive it.`],
   ["Troubleshooting", "Arm stops short of the lever: batteries below 1.1 V a cell. Arm reaches the lever but cannot flip it: NiMH cells, or grease on the lever. Door stays open: a torsion spring has slipped off its rivet. Arm comes out on its own: the play button in the corner is on."],
   ["Warranty", `12 months or ${fmt(lifeUses)} uses, whichever comes first. Void if the machine is used for anything useful.`],
 ];
 const REPO = "https://github.com/franbrizuelab/useless-machine";
 const GITHUB_MARK = "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z";
-const manual = `<section class="um-manual" aria-labelledby="um-manual-title"><header class="um-manual-head"><h2 id="um-manual-title">Owner's manual</h2><span>Model UM-3 · 4.5 V</span></header><dl class="um-manual-list">${MANUAL.map(([term, text]) => `<div><dt>${term}</dt><dd>${text}</dd></div>`).join("")}</dl><p class="um-manual-last">Last change · firmware v3.0.1: fixed a bug where the machine was briefly useful.</p></section>`;
+// v3's sections under the figure fold open and shut; both start open
+const CHEVRON = `<svg class="um-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>`;
+const manual = `<details class="um-manual um-fold" open><summary class="um-manual-head"><h2>Owner's manual</h2><span>Model UM-3 · 4.5 V</span>${CHEVRON}</summary><dl class="um-manual-list">${MANUAL.map(([term, text]) => `<div><dt>${term}</dt><dd>${text}</dd></div>`).join("")}</dl><p class="um-manual-last">Last change · firmware v3.0.1: fixed a bug where the machine was briefly useful.</p></details>`;
 const footer = `<footer class="um-foot"><span>Useless machine · model UM-3</span><a class="um-git" href="${REPO}" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${GITHUB_MARK}"/></svg>GitHub</a></footer>`;
 const stageLabel = V3
   ? "Useless machine. Space or Enter flips the switch, E steps through the take-apart stages, the arrow keys step through the parts, Escape clears."
@@ -792,7 +850,11 @@ const stageLabel = V3
     : "Useless machine. Space or Enter flips the switch, E takes it apart, the arrow keys step through the parts, Escape clears.";
 let plate = k.plateHtml({ fig: "Fig 1", title: "Useless machine", hint: V3 ? "" : "Click the switch", readout: V3 ? "" : "ready", keys: [], caption: "", body: `<div class="iso-stage um-stage" tabindex="0" role="group" aria-label="${stageLabel}">${V3 ? `<div class="um-view">${svg}</div>` : svg}</div>${corners}` });
 if (V3) plate = plate.replace(/<span class="iso-plate-corner" data-corner="readout"[^>]*><\/span>/, "");
-const body = `<div class="um${V3 ? " um3" : ""}">${plate.replace("</div></figure>", `</div>${controls}</figure>`)}<div class="um-below"><div class="um-circuit">${circuit}</div><ol class="um-parts">${parts}</ol></div>${V3 ? manual + footer : `<p class="iso-caption um-caption">${caption}</p>`}</div>`;
+// v3's panel has two tabs: the circuit, and the last part the reader pointed at, drawn alone and turning
+const panel = `<section class="um-panel"><div class="um-tabs" role="tablist" aria-label="Panel"><button type="button" role="tab" id="um-tab-circuit" aria-selected="true" aria-controls="um-pane-circuit" data-tab="circuit">Circuit</button><button type="button" role="tab" id="um-tab-piece" aria-selected="false" aria-controls="um-pane-piece" data-tab="piece" tabindex="-1">Piece</button></div><div class="um-pane" id="um-pane-circuit" role="tabpanel" aria-labelledby="um-tab-circuit">${circuit}</div><div class="um-pane" id="um-pane-piece" role="tabpanel" aria-labelledby="um-tab-piece" hidden><div class="um-pview"><svg class="um-psvg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" role="img" aria-label="The selected part, turning"><g data-frames></g></svg></div><p class="um-pempty" data-pempty>Hover over a number to see that piece here, on its own.</p><p class="um-pcap" data-pcap hidden><span class="um-info-num" data-pnum></span><span data-pname></span></p></div></section>`;
+const partsFold = `<details class="um-fold um-partsfold" open><summary><h2>Parts</h2><span>${CALLS.length}</span>${CHEVRON}</summary><ol class="um-parts">${parts}</ol></details>`;
+const below = V3 ? panel + partsFold + manual + footer : `<div class="um-below"><div class="um-circuit">${circuit}</div><ol class="um-parts">${parts}</ol></div><p class="iso-caption um-caption">${caption}</p>`;
+const body = `<div class="um${V3 ? " um3" : ""}">${plate.replace("</div></figure>", `</div>${controls}</figure>`)}${below}</div>`;
 const SITE = "https://franbrizuelab.github.io/useless-machine/";
 const PREVIEW = {
   title: "Useless machine",

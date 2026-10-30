@@ -1,0 +1,9 @@
+[["wait", 400], ["until", "window.__um && window.__um.assembled() && window.__um.idle()", 15000],
+ ["shot", "shots/v3/p-circuit.png", ".um-panel", 1],
+ ["click", "[data-tab='piece']"], ["wait", 300],
+ ["shot", "shots/v3/p-empty.png", ".um-panel", 1],
+ ["move", ".um-call[data-c='4'] .um-badge", 0.5, 0.5], ["wait", 200], ["move", ".um-caption, .um-foot", 0.5, 0.5],
+ ["until", "document.querySelector('[data-frames]').children.length > 0", 8000], ["wait", 300],
+ ["eval", "'info after unhover: ' + document.querySelector('.um-info').hasAttribute('data-show') + ', piece shown: ' + document.querySelector('[data-pname]').textContent + ', frames ' + document.querySelector('[data-frames]').children.length"],
+ ["scroll", ".um-panel"], ["shot", "shots/v3/p-page.png", ".um", 0.8],
+ ["sheet", "shots/v3/p-turn.png", 700, 8, ".um-pane:not([hidden])", 0.6]]
