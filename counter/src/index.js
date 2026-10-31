@@ -17,7 +17,9 @@ import { DurableObject } from "cloudflare:workers";
 // visitor may send MESSAGES_EACH in all (by a random id their browser keeps) and each address ADDRESS_PER_DAY a day
 // (stored only as a keyed hash). The owner reads and deletes them at /inbox/<INBOX_KEY>, and can reset every limit.
 //   POST /message    { name, message, visitor, challenge, sig, nonce } → { sent, left } or { error }
-const SITE = "https://franbrizuelab.github.io";
+// the site's home, plus the GitHub Pages address it had before the domain
+const SITE = "https://sparsefocus.com";
+const SITES = [SITE, "https://www.sparsefocus.com", "https://franbrizuelab.github.io"];
 const LOCAL = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 const BITS = 17;
 const CHALLENGE_MS = 120000;
@@ -134,8 +136,8 @@ function inboxPage(messages, key) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Useless machine · inbox</title><style>body{margin:0;background:#f2f2ef;color:#18181a;font:15px/1.55 ui-sans-serif,system-ui,sans-serif}main{width:min(720px,100% - 32px);margin:40px auto}h1{display:flex;align-items:baseline;font-size:18px;margin:0 0 18px}h1 form{margin-left:auto}h1 span{color:#8c8c90;font:12px ui-monospace,monospace;letter-spacing:.06em;margin-left:8px}article{background:#fbfbfa;border-radius:12px;box-shadow:0 0 0 1px #c9c9d0;padding:14px 18px;margin:0 0 12px}article header{display:flex;align-items:baseline;gap:12px}time{color:#8c8c90;font:12px ui-monospace,monospace}form{margin-left:auto}button{border:1px solid #c9c9d0;border-radius:8px;background:#fff;padding:3px 10px;font:12px ui-monospace,monospace;cursor:pointer}p{margin:8px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}.none{color:#8c8c90}</style></head><body><main><h1>Messages<span>${messages.length}</span><form class="reset" method="post" action="/inbox/${key}/reset"><button title="Lets every visitor and every network send again">Reset send limits</button></form></h1>${rows || '<p class="none">No messages yet.</p>'}</main></body></html>`;
 }
 
-// the page on GitHub Pages, a local server, or a file opened from disk (Origin "null") may use it
-const allowedOrigin = (origin) => origin === SITE || origin === "null" || LOCAL.test(origin ?? "");
+// the site, a local server, or a file opened from disk (Origin "null") may use it
+const allowedOrigin = (origin) => SITES.includes(origin) || origin === "null" || LOCAL.test(origin ?? "");
 
 async function validProof(body, secret) {
   if (!body || typeof body.challenge !== "string" || typeof body.sig !== "string" || typeof body.nonce !== "string") return false;

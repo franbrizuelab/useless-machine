@@ -182,6 +182,18 @@ if (V2) {
   }
 }
 const pageName = (ver) => `useless-machine${ver > 1 ? `-v${ver}` : ""}${THEME === "light" ? "-light" : ""}.html`;
+// --site=DIR writes the page into the personal site instead (sparsefocus.com/proj/useless-machine/): v3 is the
+// folder's index.html, v1 and v2 sit in v1/ and v2/, and the version links between them are relative folders.
+const SITE_DIR = (() => {
+  const flag = process.argv.find((arg) => arg.startsWith("--site="));
+  return flag ? flag.slice("--site=".length) : null;
+})();
+const siteFolder = (ver) => (ver === 3 ? "" : `v${ver}/`);
+const linkTo = (ver) => {
+  if (!SITE_DIR) return pageName(ver);
+  const here = siteFolder(VER);
+  return (here ? "../" : "") + (siteFolder(ver) || (here ? "" : "./"));
+};
 
 const STATE0 = M.fresh();
 const parts0 = dynamicParts(P, { ...STATE0, fine: V3 });
@@ -757,7 +769,7 @@ const DATA = {
   v2: V2,
   v3: V3,
   base: V3 ? fitOf(0) : null,
-  counter: V3 ? { url: COUNTER, site: "https://franbrizuelab.github.io" } : null,
+  counter: V3 ? { url: COUNTER, site: SITE_DIR ? "https://sparsefocus.com" : "https://franbrizuelab.github.io" } : null,
   shapes: V3 ? Object.fromEntries(CALLS.map((call) => [call.id, pieceShapes(call)])) : null,
   door: V2 ? DOOR_TABLE : null,
   stages: V2 ? STAGES.map((stage, s) => ({ id: stage.id, name: stage.name, order: stage.order, rides: stage.rides, fit: fitOf(s + 1) })) : null,
@@ -775,7 +787,7 @@ const label = V2
   : "A useless machine in cutaway: a box of clear acrylic with its front and right walls removed. A toggle switch on the lid, a DC gearmotor with a 9 to 1 gear train, a curved arm on the output shaft, a limit switch and three AA cells. The arm rises through a slit in the lid, flips the toggle back off and retracts. The lid, the mechanism and the battery pack lift apart along the vertical axis.";
 const svg = k.figureSvg({ width: W, height: H, label, body: `<g class="um-engine">${groups.join("")}</g><g class="um-over"></g>` });
 const parts = CALLS.map((call) => `<li><button type="button" class="um-part" data-c="${call.id}"><span class="um-num">${call.id}</span><span class="um-name">${call.name}</span><span class="um-say">${call.say}</span></button></li>`).join("");
-const versions = `<nav class="um-ver" aria-label="Version">${[1, 2, 3].map((ver) => `<a href="${pageName(ver)}"${ver === VER ? ' aria-current="page"' : ""}>v${ver}</a>`).join("")}</nav>`;
+const versions = `<nav class="um-ver" aria-label="Version">${[1, 2, 3].map((ver) => `<a href="${linkTo(ver)}"${ver === VER ? ' aria-current="page"' : ""}>v${ver}</a>`).join("")}</nav>`;
 const STAGE_SAY = ["the whole machine", "lid, mechanism and battery lifted apart along Z", "arm and gears pulled off their shafts along Y", "cells and clip slid out along X"];
 // v3 stage buttons: 1 is the whole machine and 2-4 the take-apart stages; pressing the lit one goes back to 1.
 const stepButtons = STAGES.length > 1 && V3
@@ -793,7 +805,7 @@ const GEAR = (() => {
   return `M${points.map((p) => p.map((v) => v.toFixed(2)).join(" ")).join("L")}Z`;
 })();
 const flipIcon = `<button type="button" class="um-act" data-flip aria-label="Flip the switch"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${HAND}"/></svg></button>`;
-const settings = `<div class="um-settings"><nav class="um-ver" id="um-ver" aria-label="Version">${[1, 2, 3].map((ver) => `<a href="${pageName(ver)}"${ver === VER ? ' aria-current="page"' : ""}>v${ver}</a>`).join("")}</nav><button type="button" class="um-act um-gear" data-settings aria-expanded="false" aria-controls="um-ver" aria-label="Settings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${GEAR}"/><circle cx="8" cy="8" r="2.2"/></svg></button></div>`;
+const settings = `<div class="um-settings"><nav class="um-ver" id="um-ver" aria-label="Version">${[1, 2, 3].map((ver) => `<a href="${linkTo(ver)}"${ver === VER ? ' aria-current="page"' : ""}>v${ver}</a>`).join("")}</nav><button type="button" class="um-act um-gear" data-settings aria-expanded="false" aria-controls="um-ver" aria-label="Settings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${GEAR}"/><circle cx="8" cy="8" r="2.2"/></svg></button></div>`;
 const controls = V3
   ? `<div class="um-controls">${flipIcon}${stepButtons}${settings}</div><div class="um-info" data-info-box><div class="um-info-text" aria-hidden="true"><p class="um-info-empty" data-info-empty>Hover over a number to see the piece and what it does.</p><div class="um-info-card" data-info-card><span class="um-info-num" data-info-num></span><span class="um-info-name" data-info-name></span><span class="um-info-say" data-info-say></span></div></div><div class="um-info-piece" data-piece-view><canvas class="um-pcanvas" data-piece-canvas role="img" aria-label="The part under the pointer, turning"></canvas></div><div class="um-info-circuit" data-circuit-pane aria-hidden="true">${circuit}</div><button type="button" class="um-bolt" data-circuit aria-pressed="false" aria-label="Show the circuit"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.3 1.6 4 9h3.6l-1 5.4L12 7H8.4z"/></svg></button></div>`
   : `<div class="um-controls">${flipButton}<button type="button" class="um-btn" data-apart>Take apart</button><span class="um-note" data-note aria-live="polite"></span>${versions}</div>`;
@@ -843,7 +855,7 @@ if (V3) plate = plate.replace(/<span class="iso-plate-corner" data-corner="reado
 const partsFold = `<details class="um-fold um-partsfold" open><summary><h2>Parts</h2><span>${CALLS.length}</span>${CHEVRON}</summary><div class="um-fold-body"><ol class="um-parts">${parts}</ol></div></details>`;
 const below = V3 ? partsFold + manual + footer : `<div class="um-below"><div class="um-circuit">${circuit}</div><ol class="um-parts">${parts}</ol></div><p class="iso-caption um-caption">${caption}</p>`;
 const body = `<div class="um${V3 ? " um3" : ""}">${plate.replace("</div></figure>", `</div>${controls}</figure>`)}${below}</div>`;
-const SITE = "https://franbrizuelab.github.io/useless-machine/";
+const SITE = SITE_DIR ? "https://sparsefocus.com/proj/useless-machine/" : "https://franbrizuelab.github.io/useless-machine/";
 const PREVIEW = {
   title: "Useless machine",
   say: "An interactive cutaway: flip the toggle and an arm pushes open a door in the lid, flips the switch back off and retracts. Take it apart stage by stage.",
@@ -853,8 +865,13 @@ const previewTags = (url) =>
   `<meta name="description" content="${PREVIEW.say}"><meta property="og:type" content="website"><meta property="og:site_name" content="${PREVIEW.title}"><meta property="og:title" content="${PREVIEW.title}"><meta property="og:description" content="${PREVIEW.say}"><meta property="og:url" content="${url}"><meta property="og:image" content="${SITE}preview.jpg"><meta property="og:image:type" content="image/jpeg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="${PREVIEW.alt}"><meta name="twitter:card" content="summary_large_image">`;
 let page = k.pageHtml({ title: "Useless machine", theme: THEME, body: `<style>${css}</style>${body}`, script, width: V3 ? 1100 : 1000 });
 // v3 drops the page's empty band above the card, and carries the link-preview tags (WhatsApp, Slack, social cards)
-if (V3) page = page.replace("margin:64px auto 96px", "margin:16px auto 64px").replace("<title>Useless machine</title>", `<title>Useless machine</title>${previewTags(SITE + pageName(3))}`);
-writeFileSync(join(HERE, pageName(VER)), page);
+if (V3) page = page.replace("margin:64px auto 96px", "margin:16px auto 64px").replace("<title>Useless machine</title>", `<title>Useless machine</title>${previewTags(SITE_DIR ? SITE : SITE + pageName(3))}`);
+if (SITE_DIR) {
+  const { mkdirSync, copyFileSync } = await import("node:fs");
+  mkdirSync(join(SITE_DIR, siteFolder(VER)), { recursive: true });
+  writeFileSync(join(SITE_DIR, siteFolder(VER), "index.html"), page);
+  if (V3) copyFileSync(join(HERE, "preview.jpg"), join(SITE_DIR, "preview.jpg"));
+} else writeFileSync(join(HERE, pageName(VER)), page);
 console.log("wrote", `${R.items.length} items`, `${(page.length / 1024).toFixed(0)} KB`, `fit ${fit.toFixed(2)}`);
 const first = A.auditOrExit(R, P, { crowd: CROWD_OK });
 if (first && V2) {

@@ -1,15 +1,19 @@
 # Useless machine
 
-[![The arm has pushed the lid's door open and is flipping the toggle switch back off](preview.jpg)](https://franbrizuelab.github.io/useless-machine/)
+[![The arm has pushed the lid's door open and is flipping the toggle switch back off](preview.jpg)](https://sparsefocus.com/proj/useless-machine/)
 
 An interactive isometric cutaway of a useless machine: flip the toggle and an arm pushes a door open in the lid,
 flips the switch back off and retracts. Built with the `anatomy` figure kit.
 
-**Live:** https://franbrizuelab.github.io/useless-machine/
+**Live:** https://sparsefocus.com/proj/useless-machine/
 
-Each page is a single standalone HTML file:
+It lives on the personal site at `sparsefocus.com/proj/useless-machine/` (v3), with `v1/` and `v2/` beside it. The
+site's own repo is `sparsefocus_front`, next to this one; `./publish.sh` builds the three versions into its
+`proj/useless-machine/` folder. The old GitHub Pages address serves the forwarding pages in `docs/`.
 
-- `useless-machine-v3-light.html`: current version (`index.html` opens it)
+Built locally, each version is a single standalone HTML file here:
+
+- `useless-machine-v3-light.html`: current version
 - `useless-machine-v2-light.html`: lid door, fixed circuit, per-axis take-apart, wiring
 - `useless-machine-light.html`: v1
 
